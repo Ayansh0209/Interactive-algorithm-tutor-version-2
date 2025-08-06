@@ -1,0 +1,563 @@
+[
+  {
+    "event": "call",
+    "line": 0,
+    "function": "<module>",
+    "locals": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ]
+    },
+    "code": "print(\"Prime?\" , result)",
+    "changed_vars": [
+      "__code_lines__"
+    ],
+    "changed_values": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ]
+    },
+    "scope": "function",
+    "depth": 1,
+    "var_types": {
+      "__code_lines__": "array"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 2,
+    "function": "<module>",
+    "locals": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ]
+    },
+    "code": "def is_prime(n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": null,
+    "depth": 1,
+    "var_types": {
+      "__code_lines__": "array"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 11,
+    "function": "<module>",
+    "locals": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ],
+      "is_prime": "<function is_prime at 0x00000200D33E8FE0>"
+    },
+    "code": "number = 7",
+    "changed_vars": [
+      "is_prime"
+    ],
+    "changed_values": {
+      "is_prime": "<function is_prime at 0x00000200D33E8FE0>"
+    },
+    "scope": null,
+    "depth": 1,
+    "var_types": {
+      "__code_lines__": "array",
+      "is_prime": "function"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 12,
+    "function": "<module>",
+    "locals": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ],
+      "is_prime": "<function is_prime at 0x00000200D33E8FE0>",
+      "number": 7
+    },
+    "code": "result = is_prime(number)",
+    "changed_vars": [
+      "number"
+    ],
+    "changed_values": {
+      "number": 7
+    },
+    "scope": null,
+    "depth": 1,
+    "var_types": {
+      "__code_lines__": "array",
+      "is_prime": "function",
+      "number": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "call",
+    "line": 2,
+    "function": "is_prime",
+    "locals": {
+      "n": 7
+    },
+    "code": "def is_prime(n):",
+    "changed_vars": [
+      "n"
+    ],
+    "changed_values": {
+      "n": 7
+    },
+    "scope": "function",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 3,
+    "function": "is_prime",
+    "locals": {
+      "n": 7
+    },
+    "code": "if n <= 1:",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "conditional",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 6,
+    "function": "is_prime",
+    "locals": {
+      "n": 7
+    },
+    "code": "for i in range(2, n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "loop",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 7,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 2
+    },
+    "code": "if n % i == 0:",
+    "changed_vars": [
+      "i"
+    ],
+    "changed_values": {
+      "i": 2
+    },
+    "scope": "conditional",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 6,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 2
+    },
+    "code": "for i in range(2, n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "loop",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 7,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 3
+    },
+    "code": "if n % i == 0:",
+    "changed_vars": [
+      "i"
+    ],
+    "changed_values": {
+      "i": 3
+    },
+    "scope": "conditional",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 6,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 3
+    },
+    "code": "for i in range(2, n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "loop",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 7,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 4
+    },
+    "code": "if n % i == 0:",
+    "changed_vars": [
+      "i"
+    ],
+    "changed_values": {
+      "i": 4
+    },
+    "scope": "conditional",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 6,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 4
+    },
+    "code": "for i in range(2, n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "loop",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 7,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 5
+    },
+    "code": "if n % i == 0:",
+    "changed_vars": [
+      "i"
+    ],
+    "changed_values": {
+      "i": 5
+    },
+    "scope": "conditional",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 6,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 5
+    },
+    "code": "for i in range(2, n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "loop",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 7,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 6
+    },
+    "code": "if n % i == 0:",
+    "changed_vars": [
+      "i"
+    ],
+    "changed_values": {
+      "i": 6
+    },
+    "scope": "conditional",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 6,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 6
+    },
+    "code": "for i in range(2, n):",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": "loop",
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 9,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 6
+    },
+    "code": "return True",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": null,
+    "depth": 2,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "return",
+    "line": 9,
+    "function": "is_prime",
+    "locals": {
+      "n": 7,
+      "i": 6
+    },
+    "code": "return True",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": null,
+    "depth": 1,
+    "var_types": {
+      "n": "primitive",
+      "i": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "line",
+    "line": 13,
+    "function": "<module>",
+    "locals": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ],
+      "is_prime": "<function is_prime at 0x00000200D33E8FE0>",
+      "number": 7,
+      "result": true
+    },
+    "code": "print(\"Prime?\" , result)",
+    "changed_vars": [
+      "__code_lines__",
+      "is_prime",
+      "number",
+      "result"
+    ],
+    "changed_values": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ],
+      "is_prime": "<function is_prime at 0x00000200D33E8FE0>",
+      "number": 7,
+      "result": true
+    },
+    "scope": null,
+    "depth": 1,
+    "var_types": {
+      "__code_lines__": "array",
+      "is_prime": "function",
+      "number": "primitive",
+      "result": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "return",
+    "line": 13,
+    "function": "<module>",
+    "locals": {
+      "__code_lines__": [
+        "",
+        "def is_prime(n):",
+        "    if n <= 1:",
+        "        return False",
+        "",
+        "    for i in range(2, n):",
+        "        if n % i == 0:",
+        "            return False",
+        "    return True",
+        "",
+        "number = 7",
+        "result = is_prime(number)",
+        "print(\"Prime?\" , result)"
+      ],
+      "is_prime": "<function is_prime at 0x00000200D33E8FE0>",
+      "number": 7,
+      "result": true
+    },
+    "code": "print(\"Prime?\" , result)",
+    "changed_vars": [],
+    "changed_values": {},
+    "scope": null,
+    "depth": 0,
+    "var_types": {
+      "__code_lines__": "array",
+      "is_prime": "function",
+      "number": "primitive",
+      "result": "primitive"
+    },
+    "branch_taken": null
+  },
+  {
+    "event": "print",
+    "output": "Prime? True"
+  }
+]
