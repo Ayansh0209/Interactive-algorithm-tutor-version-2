@@ -8,6 +8,15 @@ tracer = []
 prevVars = {}
 CodeDepth = 0  # tracks depth of function calls (useful for recursion/backtracking)
 print_buffer = io.StringIO()
+FORBIDDEN_KEYWORDS = [
+    "import os", "import sys", "subprocess", "open(", "exec(", "eval(",
+    "import shutil", "from os", "from sys", "socket", "threading", "multiprocessing"
+]
+
+def is_code_safe(code):
+    lowered = code.lower()
+    return not any(kw in lowered for kw in FORBIDDEN_KEYWORDS)
+
 
 def detectType(val):
     if isinstance(val, list):
@@ -105,6 +114,12 @@ def runCode(code: str):
     prevVars = {}
     CodeDepth = 0
     print_buffer = io.StringIO()
+    
+    if not is_code_safe(code):
+        return [{
+            "event": "exception",
+            "error": "Unsafe code detected. Use of restricted functions/modules is not allowed."
+        }]
 
     try:
         globals_dict = {"__code_lines__": code.splitlines()}

@@ -3,12 +3,12 @@ import Navbar from './components/Navbar'
 import ControlBar from './components/ControlBar'
 import MainContent from './components/MainContent'
 import Sidebar from './components/Sidebar'
+import ProcessingBar from './components/ProcessingBar'
+import { TraceProvider, useTrace } from './contexts/TraceContext'
 import './App.css'
 
-// Create the context
+// Theme Context
 const ThemeContext = createContext()
-
-// Custom hook to use theme
 export const useTheme = () => {
   const context = useContext(ThemeContext)
   if (!context) {
@@ -17,14 +17,10 @@ export const useTheme = () => {
   return context
 }
 
-// Theme Provider Component
 function ThemeProvider({ children }) {
   const [isDarkMode, setIsDarkMode] = useState(true)
 
-  const value = {
-    isDarkMode,
-    setIsDarkMode
-  }
+  const value = { isDarkMode, setIsDarkMode }
 
   return (
     <ThemeContext.Provider value={value}>
@@ -33,63 +29,32 @@ function ThemeProvider({ children }) {
   )
 }
 
-// Main App Component
-function AppContent() {
-  const [speed, setSpeed] = useState(1)
-  const [currentStep, setCurrentStep] = useState(1)
-  const [totalSteps] = useState(237)
-  const [selectedLanguage, setSelectedLanguage] = useState('python')
-  const [code, setCode] = useState(`def solve(row, n, board):
-    if row == n:
-        return True
-    
-    for col in range(n):
-        if is_safe(row, col, board):
-            board[row] = col
-            if solve(row + 1, n, board):
-                return True
-            board[row] = -1
-    return False
-
-def is_safe(row, col, board):
-    for i in range(row):
-        if board[i] == col or abs(board[i] - col) == abs(i - row):
-            return False
-    return True
-
-N = 4
-board = [-1] * N
-solve(0, N, board)`)
-
+// 🧠 Main Layout – no AppContent
+function AppLayout() {
   const { isDarkMode } = useTheme()
+  const { code, currentStep } = useTrace()
+  const [speed, setSpeed] = useState(1)
 
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <Navbar />
-      <ControlBar 
-        speed={speed}
-        setSpeed={setSpeed}
-        currentStep={currentStep}
-        totalSteps={totalSteps}
-      />
+      <ControlBar speed={speed} setSpeed={setSpeed} currentStep={currentStep} totalSteps={code.split('\n').length} />
       <div className="flex">
-        <MainContent code={code} currentStep={currentStep} />
-        <Sidebar 
-          selectedLanguage={selectedLanguage}
-          setSelectedLanguage={setSelectedLanguage}
-          code={code}
-          setCode={setCode}
-        />
+        <MainContent currentStep={currentStep} />
+        <Sidebar />
       </div>
     </div>
   )
 }
 
-// Root App Component
+// Root App
 function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <TraceProvider>
+        <ProcessingBar />
+        <AppLayout />
+      </TraceProvider>
     </ThemeProvider>
   )
 }

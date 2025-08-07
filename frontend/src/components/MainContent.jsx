@@ -1,6 +1,8 @@
 import React from 'react'
 import { useTheme } from '../App'
-// import CodeDisplay from './CodeDisplay'
+import CodeDisplay from './CodeDisplay'
+import ControlBar from './ControlBar'
+import PlayControls from './PlayControls'
 // import VisualizationArea from './VisualizationArea'
 
 function MainContent({ code, currentStep }) {
@@ -13,10 +15,17 @@ function MainContent({ code, currentStep }) {
   return (
     <div className="flex-1 p-6">
       <div className={`${themeClasses} rounded-lg border h-[500px] flex`}>
-        {/* Code Display - Left Side */}
+       
+         <div className="flex-1 overflow-y-auto">
+          <CodeDisplay />
+        </div>
         <div className="flex-1">
+
        
         </div>
+       
+           <PlayControls/>
+         
 
     
        

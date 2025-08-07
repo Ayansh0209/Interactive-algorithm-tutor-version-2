@@ -1,50 +1,43 @@
- 
+import React from 'react';
+import { useTrace } from '../contexts/TraceContext';
 
-import { useTheme } from '../app/page'
+// Import SVG file paths
+import PrevStepIcon from '../assets/PrevStep.svg';
+import NextStepIcon from '../assets/next-step.svg';
+import ResetIcon from '../assets/reset.svg';
 
-export default function Navbar() {
-  const { isDarkMode, setIsDarkMode } = useTheme()
+function PlayControls() {
+  const { traceSteps, currentStep, setCurrentStep } = useTrace();
 
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode)
-  }
+  const goNext = () => {
+    if (currentStep < traceSteps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
 
-  const themeClasses = isDarkMode 
-    ? 'bg-gray-900 border-gray-800 text-white' 
-    : 'bg-gray-100 border-gray-200 text-gray-900'
+  const goPrev = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const reset = () => {
+    setCurrentStep(0);
+  };
 
   return (
-    <nav className={`${themeClasses} border-b px-6 py-4`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-8">
-          <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
-              Interactive Algorithm Tutor
-            </h1>
-          </div>
-          {/* Expandable navigation area - currently empty but structured for future additions */}
-          <div className="hidden md:flex items-center space-x-6">
-            {/* Future navigation items will go here */}
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={toggleTheme}
-            className={`p-2 rounded-lg transition-colors ${
-              isDarkMode 
-                ? 'bg-gray-800 hover:bg-gray-700' 
-                : 'bg-gray-200 hover:bg-gray-300'
-            }`}
-            title="Toggle theme"
-          >
-            {isDarkMode ? '🌙' : '☀️'}
-          </button>
-          <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
-            Login
-          </button>
-        </div>
-      </div>
-    </nav>
-  )
+    <div className="flex justify-center gap-4 mt-4">
+      <button onClick={goPrev} title="Previous Step">
+        <img src={PrevStepIcon} alt="Previous Step" className="w-6 h-6" />
+      </button>
+      <button onClick={reset} title="Reset">
+        <img src={ResetIcon} alt="Reset" className="w-6 h-6" />
+      </button>
+      <button onClick={goNext} title="Next Step">
+        <img src={NextStepIcon} alt="Next Step" className="w-6 h-6" />
+      </button>
+    </div>
+  );
 }
+
+export default PlayControls;
