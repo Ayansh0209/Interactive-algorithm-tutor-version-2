@@ -27,96 +27,6 @@ def detectType(val):
         return "function"
     return "primitive"
 
-# new code of linked list need to be checked
-
-
-
-def dataStruct(val):
-    """Detects and serializes known data structures into JSON-friendly formats."""
-    # Linked List (manual)
-    if hasattr(val, "next") and not isinstance(val, (str, bytes)):
-        try:
-            nodes = []
-            current = val
-            visited = set()
-            while current and id(current) not in visited:
-                visited.add(id(current))
-                node_repr = {}
-                for attr in dir(current):
-                    if not attr.startswith("_") and not callable(getattr(current, attr)):
-                        node_repr[attr] = repr(getattr(current, attr))
-                nodes.append(node_repr)
-                current = getattr(current, "next", None)
-            return {"type": "linked_list", "nodes": nodes}
-        except Exception as e:
-            return {"type": "linked_list", "error": str(e)}
-
-    # Linked List from prebuilt library (llist, deque, etc.)
-    try:
-        from llist import sllist
-        if isinstance(val, sllist):
-            return {"type": "linked_list", "nodes": [repr(x) for x in val]}
-    except ImportError:
-        pass
-
-    # Queue from collections.deque (stack/queue detection comes later)
-    from collections import deque
-    if isinstance(val, deque):
-        return {"type": "deque", "elements": list(val)}
-
-    # Default: try normal JSON serialization
-    try:
-        return json.loads(json.dumps(val))
-    except:
-        return repr(val)
-
-
-
-# Check for doubly linked list
-if hasattr(val, "next") and hasattr(val, "prev") and not isinstance(val, (str, bytes)):
-    try:
-        nodes = []
-        current = val
-        visited = set()
-        while current and id(current) not in visited:
-            visited.add(id(current))
-            node_repr = {}
-            for attr in dir(current):
-                if not attr.startswith("_") and not callable(getattr(current, attr)):
-                    node_repr[attr] = repr(getattr(current, attr))
-            nodes.append(node_repr)
-            current = getattr(current, "next", None)
-        return {"type": "doubly_linked_list", "nodes": nodes}
-    except Exception as e:
-        return {"type": "doubly_linked_list", "error": str(e)}
-
-# Check for llist.dllist
-try:
-    from llist import dllist
-    if isinstance(val, dllist):
-        return {"type": "doubly_linked_list", "nodes": [repr(x) for x in val]}
-except ImportError:
-    pass
-
-# Check for queue.Queue
-try:
-    from queue import Queue
-    if isinstance(val, Queue):
-        return {"type": "queue", "elements": list(val.queue)}
-except ImportError:
-    pass
-
-
-
-
-
-
-
-
-
-
-
-
 def traceSteps(frame, event, arg):
     global prevVars, CodeDepth
 
@@ -143,8 +53,10 @@ def traceSteps(frame, event, arg):
     changed_values = {}  # NEW: store changed values
 
     for var, val in PyNoise.items():
-        
-        safe_val = dataStruct(val)
+        try:
+            safe_val = json.loads(json.dumps(val))
+        except:
+            safe_val = repr(val)
         safe_locals[var] = safe_val
         type_info[var] = detectType(val)
 
