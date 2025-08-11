@@ -29,7 +29,6 @@ def detectType(val):
         return "function"
     return "primitive"
 
-
 def traceSteps(frame, event, arg):
     global prevVars, CodeDepth
 
@@ -66,7 +65,8 @@ def traceSteps(frame, event, arg):
             safe_val = repr(val)
         safe_locals[var] = safe_val
         type_info[var] = detectType(val)
-
+        # Track only changed values
+    
         # Track only changed values
        # if var not in prevVars or prevVars[var] != safe_val:
         #    changed_values[var] = safe_val

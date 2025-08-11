@@ -24,7 +24,7 @@
     "line": 14,
     "function": "<module>",
     "locals": {
-      "solve": "<function solve at 0x000002A2F1388FE0>"
+      "solve": "<function solve at 0x000001AE679698A0>"
     },
     "scope": null,
     "depth": 1,
@@ -38,8 +38,8 @@
     "line": 20,
     "function": "<module>",
     "locals": {
-      "solve": "<function solve at 0x000002A2F1388FE0>",
-      "is_safe": "<function is_safe at 0x000002A2F14904A0>"
+      "solve": "<function solve at 0x000001AE679698A0>",
+      "is_safe": "<function is_safe at 0x000001AE67C704A0>"
     },
     "scope": null,
     "depth": 1,
@@ -54,8 +54,8 @@
     "line": 22,
     "function": "<module>",
     "locals": {
-      "solve": "<function solve at 0x000002A2F1388FE0>",
-      "is_safe": "<function is_safe at 0x000002A2F14904A0>",
+      "solve": "<function solve at 0x000001AE679698A0>",
+      "is_safe": "<function is_safe at 0x000001AE67C704A0>",
       "N": 7
     },
     "scope": null,
@@ -72,8 +72,8 @@
     "line": 23,
     "function": "<module>",
     "locals": {
-      "solve": "<function solve at 0x000002A2F1388FE0>",
-      "is_safe": "<function is_safe at 0x000002A2F14904A0>",
+      "solve": "<function solve at 0x000001AE679698A0>",
+      "is_safe": "<function is_safe at 0x000001AE67C704A0>",
       "N": 7,
       "board": [
         -1,
@@ -13110,8 +13110,8 @@
     "line": 23,
     "function": "<module>",
     "locals": {
-      "solve": "<function solve at 0x000002A2F1388FE0>",
-      "is_safe": "<function is_safe at 0x000002A2F14904A0>",
+      "solve": "<function solve at 0x000001AE679698A0>",
+      "is_safe": "<function is_safe at 0x000001AE67C704A0>",
       "N": 7,
       "board": [
         0,
