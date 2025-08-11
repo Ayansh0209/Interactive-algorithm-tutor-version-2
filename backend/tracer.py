@@ -50,9 +50,11 @@ def traceSteps(frame, event, arg):
     # Make all locals JSON-safe + record their type
     safe_locals = {}
     type_info = {}
-    changed_values = {}  # NEW: store changed values
+    #changed_values = {}  # NEW: store changed values
 
     for var, val in PyNoise.items():
+        if var == "__code_lines__":
+         continue 
         try:
             safe_val = json.loads(json.dumps(val))
         except:
@@ -61,10 +63,10 @@ def traceSteps(frame, event, arg):
         type_info[var] = detectType(val)
 
         # Track only changed values
-        if var not in prevVars or prevVars[var] != safe_val:
-            changed_values[var] = safe_val
+       # if var not in prevVars or prevVars[var] != safe_val:
+        #    changed_values[var] = safe_val
 
-    changedVars = list(changed_values.keys())
+    #changedVars = list(changed_values.keys())
 
     # Detect loop or condition scope
     scope_type = None
@@ -95,16 +97,16 @@ def traceSteps(frame, event, arg):
         "line": frame.f_lineno,
         "function": funcName,
         "locals": safe_locals,
-        "code": codeLine,
-        "changed_vars": changedVars,
-        "changed_values": changed_values,  # NEW: add changed_values dict
+      # "code": codeLine,
+      #  "changed_vars": changedVars,
+       # "changed_values": changed_values,  # NEW: add changed_values dict
         "scope": scope_type,
         "depth": CodeDepth,
         "var_types": type_info,
         "branch_taken": branch_taken
     })
 
-    prevVars = safe_locals.copy()
+    prevVars = {k: v for k, v in safe_locals.items() if k != "__code_lines__"}
     return traceSteps
 
 def runCode(code: str):
