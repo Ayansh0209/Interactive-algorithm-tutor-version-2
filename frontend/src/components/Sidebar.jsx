@@ -50,7 +50,7 @@ function Sidebar() {
   };
 
   return (
-    <div className={`w-80 ${themeClasses} border-l p-4`}>
+    <div className={`w-80 ${themeClasses} border-l p-4 `}>
       <div className="space-y-6">
      
         <div>

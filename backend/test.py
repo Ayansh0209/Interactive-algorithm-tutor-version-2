@@ -19,11 +19,10 @@ def is_safe(row, col, board):
             return False
     return True
 
-N = 10
+N = 7
 
 board = [-1] * N
 solve(0, N, board)
-
 
 """
 

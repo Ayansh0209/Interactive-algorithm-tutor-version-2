@@ -10,7 +10,6 @@ export async function executeAndPrepareTrace(code, setTraceSteps, setIsProcessin
     const rawTrace = await callPythonAPI(code);
     console.log("Raw trace from backend:", rawTrace);
 
-
     // Handle backend error message (if backend returns { error: "..." })
     if (!Array.isArray(rawTrace)) {
       throw new Error(rawTrace?.error || 'Unexpected backend error');
@@ -23,17 +22,23 @@ export async function executeAndPrepareTrace(code, setTraceSteps, setIsProcessin
     
     setCode(code);
 
-    const filtered = rawTrace.filter(step => step.code?.trim());
-    const processed = filtered.map((step, idx) => ({
-      ...step,
-      highlightLine: step.line,
-      nextLine: filtered[idx + 1]?.line || null,
-      frameId: idx,
-      updatedVars: step.changed_values || {},
-    }));
-
     
-    setTraceSteps(processed);
+
+    const data = rawTrace.filter(step =>step.locals && Object.keys(step.locals).length > 0).map((step,idx)=>({
+      id:idx,
+      functionName :step.function || "Global",
+      line :step.line,
+      locals:step.locals,
+      varTypes: step.var_types ||{},
+      event:step.event,
+      depth:step.depth,
+    }))
+    setTraceSteps(data);
+
+
+
+
+
   } catch (err) {
     setError(err.message || 'Unknown error');
   } finally {

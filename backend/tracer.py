@@ -6,12 +6,14 @@ import json
 
 tracer = []
 prevVars = {}
-CodeDepth = 0  # tracks depth of function calls (useful for recursion/backtracking)
+# tracks depth of function calls (useful for recursion/backtracking)
+CodeDepth = 0
 print_buffer = io.StringIO()
 FORBIDDEN_KEYWORDS = [
     "import os", "import sys", "subprocess", "open(", "exec(", "eval(",
     "import shutil", "from os", "from sys", "socket", "threading", "multiprocessing"
 ]
+
 
 def is_code_safe(code):
     lowered = code.lower()
@@ -27,13 +29,15 @@ def detectType(val):
         return "function"
     return "primitive"
 
+
 def traceSteps(frame, event, arg):
     global prevVars, CodeDepth
 
     if event not in ["call", "line", "return"]:
         return traceSteps
 
-    codeLine = linecache.getline(frame.f_code.co_filename, frame.f_lineno).strip()
+    codeLine = linecache.getline(
+        frame.f_code.co_filename, frame.f_lineno).strip()
     if not codeLine and "__code_lines__" in frame.f_globals:
         try:
             codeLine = frame.f_globals["__code_lines__"][frame.f_lineno - 1].strip()
@@ -47,14 +51,15 @@ def traceSteps(frame, event, arg):
     if "__builtins__" in PyNoise:
         del PyNoise["__builtins__"]
 
+    if "__code_lines__" in PyNoise:
+        del PyNoise["__code_lines__"]
+
     # Make all locals JSON-safe + record their type
     safe_locals = {}
     type_info = {}
-    #changed_values = {}  # NEW: store changed values
+    # changed_values = {}  # NEW: store changed values
 
     for var, val in PyNoise.items():
-        if var == "__code_lines__":
-         continue 
         try:
             safe_val = json.loads(json.dumps(val))
         except:
@@ -66,7 +71,7 @@ def traceSteps(frame, event, arg):
        # if var not in prevVars or prevVars[var] != safe_val:
         #    changed_values[var] = safe_val
 
-    #changedVars = list(changed_values.keys())
+    # changedVars = list(changed_values.keys())
 
     # Detect loop or condition scope
     scope_type = None
@@ -97,9 +102,9 @@ def traceSteps(frame, event, arg):
         "line": frame.f_lineno,
         "function": funcName,
         "locals": safe_locals,
-      # "code": codeLine,
-      #  "changed_vars": changedVars,
-       # "changed_values": changed_values,  # NEW: add changed_values dict
+        # "code": codeLine,
+        #  "changed_vars": changedVars,
+        # "changed_values": changed_values,  # NEW: add changed_values dict
         "scope": scope_type,
         "depth": CodeDepth,
         "var_types": type_info,
@@ -109,6 +114,7 @@ def traceSteps(frame, event, arg):
     prevVars = {k: v for k, v in safe_locals.items() if k != "__code_lines__"}
     return traceSteps
 
+
 def runCode(code: str):
     global tracer, prevVars, CodeDepth, print_buffer
 
@@ -116,7 +122,7 @@ def runCode(code: str):
     prevVars = {}
     CodeDepth = 0
     print_buffer = io.StringIO()
-    
+
     if not is_code_safe(code):
         return [{
             "event": "exception",
