@@ -33,20 +33,18 @@ const PauseIcon = (props) => (
   </svg>
 );
 
-
 function PlayControls() {
   const { traceSteps, currentStep, setCurrentStep } = useTrace();
   const [isPlaying, setIsPlaying] = useState(false);
   const intervalRef = useRef(null);
-  const speed = 800; // Speed in milliseconds (e.g., 800ms)
-
+  
   // Effect to handle the play/pause timer
   useEffect(() => {
     // If playing and not at the end, set an interval
     if (isPlaying && currentStep < traceSteps.length - 1) {
       intervalRef.current = setInterval(() => {
         setCurrentStep(prev => prev + 1);
-      }, speed);
+      }, window.getPlayDelay ? window.getPlayDelay() : 800);
     } else {
       // If we reach the end or are paused, stop playing
       setIsPlaying(false);
@@ -58,7 +56,7 @@ function PlayControls() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isPlaying, currentStep, traceSteps.length, setCurrentStep, speed]);
+  }, [isPlaying, currentStep, traceSteps.length, setCurrentStep,]);
 
 
   // --- Control Handlers ---

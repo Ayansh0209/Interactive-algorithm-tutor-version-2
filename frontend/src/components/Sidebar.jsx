@@ -2,6 +2,8 @@ import React from 'react'
 import { useTheme } from '../App'
 import { executeAndPrepareTrace } from '../controllers/runner';
 import { useTrace } from '../contexts/TraceContext';
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 function Sidebar() {
   const {
@@ -38,15 +40,24 @@ function Sidebar() {
         break;
       case 'cpp':
         // TO BE ADDED LATER : logic to send C++ code to backend once supported
+        setCode("// 🚧 Coming Soon 🚧");
+
         break;
       case 'javascript':
         // TO BE ADDED LATER : logic to send JavaScript code to backend once supported
+        setCode("// 🚧 Coming Soon 🚧");
+
         break;
       default:
         setError('Unsupported language selected.');
     }
 
     setCurrentStep(0);
+  };
+   const syntaxMap = {
+    python: "python",
+    cpp: "cpp",
+    javascript: "javascript"
   };
 
   return (

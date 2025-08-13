@@ -32,15 +32,13 @@ function ThemeProvider({ children }) {
 // 🧠 Main Layout – no AppContent
 function AppLayout() {
   const { isDarkMode } = useTheme()
-  const { code, currentStep } = useTrace()
-  const [speed, setSpeed] = useState(1)
 
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
       <Navbar />
-      <ControlBar speed={speed} setSpeed={setSpeed} currentStep={currentStep} totalSteps={code.split('\n').length} />
+      <ControlBar />
       <div className="flex">
-        <MainContent currentStep={currentStep} />
+        <MainContent />
         <Sidebar />
       </div>
     </div>
