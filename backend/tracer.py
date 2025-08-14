@@ -29,6 +29,35 @@ def detectType(val):
         return "function"
     return "primitive"
 
+def FilterCode(sourceCode):
+    tree = ast.parse(sourceCode)
+    exec_lines = set()
+
+    def is_skipped_top_stmt(node):
+        # Skip defs/imports
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom)):
+            return True
+        # Skip module docstring (Expr[str])
+        if isinstance(node, ast.Expr) and isinstance(getattr(node, "value", None), ast.Constant) and isinstance(node.value.value, str):
+            return True
+        return False
+
+    # Only consider top-level statements
+    for node in getattr(tree, "body", []):
+        if is_skipped_top_stmt(node):
+            continue
+        start = getattr(node, "lineno", None)
+        end = getattr(node, "end_lineno", start)
+        if start is not None:
+            exec_lines.update(range(start, (end or start) + 1))
+
+    return sorted(exec_lines)
+
+
+    
+tracingSteps =False # global flag it wont be true until we wil get value output for out visualizer
+MainLines = set()
+    
 def traceSteps(frame, event, arg):
     global prevVars, CodeDepth,tracingSteps
 
