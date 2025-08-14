@@ -30,7 +30,7 @@ def detectType(val):
     return "primitive"
 
 def traceSteps(frame, event, arg):
-    global prevVars, CodeDepth
+    global prevVars, CodeDepth,tracingSteps
 
     if event not in ["call", "line", "return"]:
         return traceSteps
@@ -44,6 +44,27 @@ def traceSteps(frame, event, arg):
             codeLine = ""
 
     funcName = frame.f_code.co_name
+    # Don't trace module lines before the first executable top-level statement
+    if frame.f_code.co_name == "<module>" and frame.f_lineno < START_AT:
+        return traceSteps
+
+
+    # Start tracing when we hit the first allowed executable line
+    if not tracingSteps:
+        if frame.f_lineno not in MainLines:
+            return traceSteps
+    # Only start when there’s a real value (not just function defs)
+        # Only consider user-ish locals (ignore __name__, __package__, etc.)
+    user_locals = {k: v for k, v in frame.f_locals.items() if not k.startswith("__")}
+    if any(not callable(v) for v in user_locals.values()):
+        tracingSteps = True
+    else:
+        return traceSteps
+
+
+
+  
+    
     PyNoise = frame.f_locals.copy()
 
     # Remove built-in clutter
@@ -53,12 +74,14 @@ def traceSteps(frame, event, arg):
     if "__code_lines__" in PyNoise:
         del PyNoise["__code_lines__"]
 
-    # Make all locals JSON-safe + record their type
+   
     safe_locals = {}
     type_info = {}
     # changed_values = {}  # NEW: store changed values
 
     for var, val in PyNoise.items():
+        if callable(val):
+            continue
         try:
             safe_val = json.loads(json.dumps(val))
         except:
@@ -116,12 +139,15 @@ def traceSteps(frame, event, arg):
 
 
 def runCode(code: str):
-    global tracer, prevVars, CodeDepth, print_buffer
+    global tracer, prevVars, CodeDepth, print_buffer,tracingSteps, MainLines,START_AT
 
     tracer = []
     prevVars = {}
     CodeDepth = 0
     print_buffer = io.StringIO()
+    tracingSteps = False
+    MainLines = set(FilterCode(code)) # this is tho hold lines number not def class import lines 
+    START_AT = min(MainLines) if MainLines else 1
 
     if not is_code_safe(code):
         return [{
