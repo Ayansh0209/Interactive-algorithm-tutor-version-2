@@ -19,15 +19,111 @@ def is_code_safe(code):
     lowered = code.lower()
     return not any(kw in lowered for kw in FORBIDDEN_KEYWORDS)
 
+def nextAttribute(obj, exclude=()):
+    """Find an attribute that points to another object of the same type."""
+    for attr in dir(obj):
+        if attr.startswith("__") or attr in exclude:
+            continue
+        try:
+           val = getattr(obj, attr)
+           if isinstance(val, type(obj)) or val is None:
+                return attr
+        except:
+            continue
+    return None
 
 def detectType(val):
-    if isinstance(val, list):
-        return "array"
-    elif isinstance(val, dict):
-        return "object"
-    elif callable(val):
-        return "function"
-    return "primitive"
+    try:
+        if isinstance(val, (int, float, str, bool, type(None))):
+            return "primitive"
+        if isinstance(val, list):
+            return "array"
+        if isinstance(val, dict):
+            return "object"
+        if callable(val):
+            return "function"
+
+        tname = type(val).__name__.lower()
+
+        # Detect linked list container
+        if hasattr(val, "__dict__"):
+            for attr in dir(val):
+                if attr.startswith("__"):
+                    continue
+                node = getattr(val, attr, None)
+                if hasattr(node, "__dict__"):
+                    link_attr = nextAttribute(node)
+                    if link_attr:
+                        if hasattr(node, "prev") or nextAttribute(node, exclude=(link_attr,)):
+                            return "doubly_linked_list"
+                        return "linked_list"
+
+        # Detect linked list node
+        link_attr = nextAttribute(val)
+        if link_attr:
+            if hasattr(val, "prev") or nextAttribute(val, exclude=(link_attr,)):
+                return "doubly_linked_node"
+            return "linked_list_node"
+
+        return tname
+    except Exception:
+        return "unknown"
+
+def visualFormat(container):
+    """Return JSON-safe visualization format for supported data structures."""
+    result = {"type": "linked_list", "head": None, "nodes": [], "current": None}
+    visited = {}
+    node_id_counter = 0
+
+    # Find starting node dynamically
+    start_node = None
+    for attr in dir(container):
+        if attr.startswith("__"):
+            continue
+        node = getattr(container, attr, None)
+        if hasattr(node, "__dict__") and nextAttribute(node) is not None:
+
+            start_node = node
+            result["head"] = 0
+            break
+    if not start_node:
+        return None
+
+    current = start_node
+    prev_id = None
+    while current and id(current) not in visited:
+        node_id = node_id_counter
+        visited[id(current)] = node_id
+        node_data = None
+        for attr in dir(current):
+            if attr.startswith("__"):
+                continue
+            val = getattr(current, attr, None)
+            if not hasattr(val, "__dict__"):
+                node_data = val
+                break
+
+        next_node = getattr(current, nextAttribute(current), None)
+        next_id = None
+        if next_node and id(next_node) not in visited:
+            next_id = node_id_counter + 1
+
+        result["nodes"].append({
+            "id": node_id,
+            "value": node_data,
+            "next": next_id,
+            "prev": prev_id
+        })
+
+        prev_id = node_id
+        current = next_node
+        node_id_counter += 1
+
+    return result
+
+        
+        
+   
 
 def FilterCode(sourceCode):
     tree = ast.parse(sourceCode)
@@ -82,8 +178,6 @@ def traceSteps(frame, event, arg):
     if not tracingSteps:
         if frame.f_lineno not in MainLines:
             return traceSteps
-    # Only start when there’s a real value (not just function defs)
-        # Only consider user-ish locals (ignore __name__, __package__, etc.)
     user_locals = {k: v for k, v in frame.f_locals.items() if not k.startswith("__")}
     if any(not callable(v) for v in user_locals.values()):
         tracingSteps = True
@@ -111,20 +205,26 @@ def traceSteps(frame, event, arg):
     for var, val in PyNoise.items():
         if callable(val):
             continue
+        var_type = detectType(val)
+        type_info[var] = var_type
+        
+        if var_type in ("linked_list", "linked_list_node", "doubly_linked_list", "doubly_linked_node"):
+            try:
+                safe_locals[var] = visualFormat(val) 
+            except:
+                safe_locals[var] = repr(val) 
+            continue 
+        
         try:
-            safe_val = json.loads(json.dumps(val))
+            safe_locals[var] = json.loads(json.dumps(val))
         except:
-            safe_val = repr(val)
-        safe_locals[var] = safe_val
-        type_info[var] = detectType(val)
-        # Track only changed values
-    
-        # Track only changed values
-       # if var not in prevVars or prevVars[var] != safe_val:
-        #    changed_values[var] = safe_val
-
-    # changedVars = list(changed_values.keys())
-
+            safe_locals[var] = repr(val)
+       
+        
+            
+        
+        
+     
     # Detect loop or condition scope
     scope_type = None
     if codeLine.startswith("for") or codeLine.startswith("while"):
