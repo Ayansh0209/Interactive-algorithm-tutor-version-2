@@ -6,7 +6,7 @@ import PlayControls from './PlayControls'
 import VisualizationArea from './VisualizationArea'
 // import VisualizationArea from './VisualizationArea'
 
-function MainContent({ code, currentStep }) {
+function MainContent({}) {
   const { isDarkMode } = useTheme()
 
   const themeClasses = isDarkMode
@@ -26,7 +26,7 @@ function MainContent({ code, currentStep }) {
 
 
 
-
+        
       </div>
     </div>
   )
