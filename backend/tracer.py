@@ -207,109 +207,105 @@ def find_head_node(obj):
         return obj
     
     return None
-
 def find_chain_structure(start_obj):
-    """Find and analyze a chain structure starting from an object"""
+    """Find and analyze a chain structure starting from an object.
+       Detects singly, doubly, and circular linked lists."""
     if not start_obj or not hasattr(start_obj, '__dict__'):
         return None
-    
-    # Try to find the actual starting node
-    head_node = find_head_node(start_obj)
-    if not head_node:
-        return None
-    
-    # Analyze the chain
+
+    # Start with given object as head (no external head finder)
+    current = start_obj
+
     chain_info = {
         'nodes': [],
         'is_circular': False,
         'is_doubly_linked': False,
         'chain_length': 0
     }
-    
-    visited = set()
-    current = head_node
+
+    visited = {}
     node_id = 0
-    
-    while current and id(current) not in visited and node_id < 100:  # Safety limit
-        visited.add(id(current))
-        
-        # Analyze current node
+    prev = None
+
+    while current and id(current) not in visited and node_id < 100:  # safety
+        visited[id(current)] = node_id
+
         attrs = get_object_attributes(current)
         if not attrs:
             break
-        
-        # Find data value (first primitive found)
+
+        # Extract primitive value (data field)
         data_value = None
-        for attr_name, attr_value in attrs.items():
-            if isinstance(attr_value, (int, float, str, bool)):
-                data_value = attr_value
+        for _, v in attrs.items():
+            if isinstance(v, (int, float, str, bool)):
+                data_value = v
                 break
-        
-        # Find next node and track connections
+
         next_node = None
-        prev_node = None
         connections = {}
-        
-        for attr_name, attr_value in attrs.items():
-            if attr_value and hasattr(attr_value, '__dict__'):
-                # Check if this points to a previous node
-                for i, prev_node_info in enumerate(chain_info['nodes']):
-                    if attr_value is prev_node_info['object']:
-                        connections['prev'] = i
-                        prev_node = attr_value
-                        chain_info['is_doubly_linked'] = True
-                        break
+
+        for _, v in attrs.items():
+            if v and hasattr(v, '__dict__'):
+                if v is prev:  # explicit backward pointer
+                    connections['prev'] = node_id - 1
+                    chain_info['is_doubly_linked'] = True
+                elif id(v) in visited:  # circular reference
+                    connections['next'] = visited[id(v)]
+                    chain_info['is_circular'] = True
                 else:
-                    # This might be the next node
-                    if next_node is None:
-                        next_node = attr_value
+                    if next_node is None:  # first unvisited object = next
+                        next_node = v
                         connections['next'] = 'pending'
-        
-        # Store node info
+
         chain_info['nodes'].append({
             'id': node_id,
             'object': current,
             'value': data_value,
             'connections': connections
         })
-        
+
+        prev = current
         current = next_node
         node_id += 1
         chain_info['chain_length'] += 1
-    
-    # Update pending next connections
+
+    # resolve "pending" next links
     for i, node in enumerate(chain_info['nodes']):
-        if 'next' in node['connections'] and node['connections']['next'] == 'pending':
+        if node['connections'].get('next') == 'pending':
             if i + 1 < len(chain_info['nodes']):
                 node['connections']['next'] = i + 1
             else:
                 del node['connections']['next']
-    
+
     return chain_info
 
 def detect_linked_list_type_structural(obj):
     """Main structural detection function with improved logic"""
     if not obj or not hasattr(obj, '__dict__'):
         return None
-    
-    # FIXED: Check container pattern FIRST, then node pattern
+
+    # First, try to identify if this is a container
     container_type = detect_container_pattern(obj)
-    if container_type:
-        return container_type
-    
-    # Only check node pattern if it's not a container
-    node_type = detect_node_pattern(obj)
-    if node_type:
-        return node_type
-    
-    # If neither works, try chain analysis as fallback
+    node_type = None
+    if not container_type:
+        node_type = detect_node_pattern(obj)
+
+    # Then analyze the actual chain structure for accuracy
     chain_info = find_chain_structure(obj)
+
     if chain_info and chain_info['chain_length'] > 0:
+        # Use chain analysis for the final decision
         if chain_info['is_doubly_linked']:
             return "doubly_linked_list" if chain_info['chain_length'] > 1 else "doubly_linked_node"
         else:
             return "linked_list" if chain_info['chain_length'] > 1 else "linked_list_node"
-    
+
+    # If no chain structure found, fall back to container or node guess
+    if container_type:
+        return container_type
+    if node_type:
+        return node_type
+
     return None
 
 def traverse_linked_structure_structural(start_obj):

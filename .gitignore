@@ -1,3 +1,4 @@
 node_modules
 debug_output.json
-text.py
+__pycache__
+debug_output.json
