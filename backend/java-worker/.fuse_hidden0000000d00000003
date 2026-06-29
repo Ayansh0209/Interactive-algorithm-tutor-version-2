@@ -1,0 +1,694 @@
+// DSA Visualizer - Java trace worker.
+//
+// Mirrors the Python worker: it executes the user's REAL Java code under the
+// JDK Debug Interface (JDI) and emits the SAME normalized Trace envelope the
+// Python engine produces, so the entire frontend works unchanged.
+//
+// Run (warm worker):   java JavaWorker.java --serve 8001
+// CLI (one trace):     java JavaWorker.java <srcFile> [stdinFile] [maxSteps]
+//
+// No javac binary required: ToolProvider gives us the in-memory compiler.
+
+import com.sun.jdi.*;
+import com.sun.jdi.connect.*;
+import com.sun.jdi.event.*;
+import com.sun.jdi.request.*;
+import com.sun.net.httpserver.*;
+import javax.tools.*;
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+import java.util.regex.*;
+
+public class JavaWorker {
+
+  // ----------------------------------------------------------------- limits
+  static final int DEFAULT_MAX_STEPS = 5000;
+  static final long DEFAULT_MAX_MILLIS = 8000;
+  static final int MAX_NODES = 500;
+  static final int MAX_DEPTH = 64;
+
+  // ============================================================== entrypoint
+  public static void main(String[] args) throws Exception {
+    if (args.length > 0 && args[0].equals("--serve")) {
+      int port = args.length > 1 ? Integer.parseInt(args[1]) : 8001;
+      serve(port);
+      return;
+    }
+    // CLI mode
+    String code = Files.readString(Paths.get(args[0]));
+    String stdin = (args.length > 1 && !args[1].equals("-"))
+        ? Files.readString(Paths.get(args[1])) : "";
+    int maxSteps = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_MAX_STEPS;
+    System.out.println(trace(code, stdin, maxSteps, DEFAULT_MAX_MILLIS));
+  }
+
+  // ============================================================== HTTP server
+  static void serve(int port) throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+    server.createContext("/health", ex -> respond(ex, 200, "{\"ok\":true,\"service\":\"java-trace-worker\"}"));
+    server.createContext("/trace", ex -> {
+      try {
+        if (!ex.getRequestMethod().equalsIgnoreCase("POST")) { respond(ex, 405, "{}"); return; }
+        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        Map<String,Object> req = (Map<String,Object>) Json.parse(body);
+        String code = str(req.get("code"));
+        String stdin = str(req.get("stdin"));
+        int maxSteps = req.get("max_steps") != null ? ((Number) req.get("max_steps")).intValue() : DEFAULT_MAX_STEPS;
+        String out = trace(code, stdin, maxSteps, DEFAULT_MAX_MILLIS);
+        respond(ex, 200, out);
+      } catch (Exception e) {
+        respond(ex, 200, "{\"meta\":{\"language\":\"java\",\"error\":" + Json.q(e.toString())
+            + ",\"num_steps\":0,\"analysis\":{}},\"steps\":[]}");
+      }
+    });
+    server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(2));
+    server.start();
+    System.out.println("Java trace worker on http://127.0.0.1:" + port);
+  }
+
+  static void respond(HttpExchange ex, int code, String body) throws IOException {
+    byte[] b = body.getBytes(StandardCharsets.UTF_8);
+    ex.getResponseHeaders().add("Content-Type", "application/json");
+    ex.sendResponseHeaders(code, b.length);
+    try (OutputStream os = ex.getResponseBody()) { os.write(b); }
+  }
+
+  static String str(Object o) { return o == null ? "" : o.toString(); }
+
+  // ============================================================== trace core
+  static String trace(String code, String stdin, int maxSteps, long maxMillis) {
+    Trace t = new Trace();
+    t.meta.put("language", "java");
+    t.meta.put("analysis", Analyze.run(code));
+    t.meta.put("output", "");
+    t.meta.put("error", null);
+    t.meta.put("truncated", false);
+    t.meta.put("num_steps", 0);
+
+    String[] codeLines = code.split("\n", -1);
+    Path dir = null;
+    VirtualMachine vm = null;
+    StringBuilder out = new StringBuilder();
+    try {
+      String mainClass = publicClassName(code);
+      dir = Files.createTempDirectory("jrun");
+      Path src = dir.resolve(mainClass + ".java");
+      Files.writeString(src, code);
+
+      JavaCompiler jc = ToolProvider.getSystemJavaCompiler();
+      ByteArrayOutputStream cerr = new ByteArrayOutputStream();
+      int rc = jc.run(null, null, cerr, "-g", "-d", dir.toString(), src.toString());
+      if (rc != 0) {
+        t.meta.put("error", "Compile error: " + cerr.toString().trim());
+        return t.toJson();
+      }
+
+      LaunchingConnector conn = Bootstrap.virtualMachineManager().defaultConnector();
+      Map<String, Connector.Argument> a = conn.defaultArguments();
+      a.get("main").setValue(mainClass);
+      a.get("options").setValue("-cp \"" + dir.toString() + "\"");
+      vm = conn.launch(a);
+
+      // feed stdin to the debuggee
+      final Process proc = vm.process();
+      if (!stdin.isEmpty()) {
+        try { proc.getOutputStream().write(stdin.getBytes(StandardCharsets.UTF_8));
+              proc.getOutputStream().flush(); } catch (Exception ignore) {}
+      }
+      // capture debuggee stdout/stderr
+      Thread to = drain(proc.getInputStream(), out);
+      Thread te = drain(proc.getErrorStream(), out);
+
+      EventRequestManager erm = vm.eventRequestManager();
+      ClassPrepareRequest cpr = erm.createClassPrepareRequest();
+      cpr.addClassExclusionFilter("java.*");
+      cpr.addClassExclusionFilter("javax.*");
+      cpr.addClassExclusionFilter("sun.*");
+      cpr.addClassExclusionFilter("jdk.*");
+      cpr.addClassExclusionFilter("com.sun.*");
+      cpr.enable();
+
+      Tracer tr = new Tracer(codeLines, maxSteps);
+      long deadline = System.currentTimeMillis() + maxMillis;
+      boolean stepCreated = false;
+      EventQueue q = vm.eventQueue();
+      boolean running = true;
+      while (running) {
+        EventSet es = q.remove(200);
+        if (es == null) {
+          if (System.currentTimeMillis() > deadline) { tr.truncated = true; break; }
+          continue;
+        }
+        for (Event ev : es) {
+          if (ev instanceof ClassPrepareEvent && !stepCreated) {
+            StepRequest sr = erm.createStepRequest(((ClassPrepareEvent) ev).thread(),
+                StepRequest.STEP_LINE, StepRequest.STEP_INTO);
+            sr.addClassExclusionFilter("java.*");
+            sr.addClassExclusionFilter("javax.*");
+            sr.addClassExclusionFilter("sun.*");
+            sr.addClassExclusionFilter("jdk.*");
+            sr.addClassExclusionFilter("com.sun.*");
+            sr.enable();
+          } else if (ev instanceof StepEvent) {
+            StepEvent se = (StepEvent) ev;
+            tr.onStep(se);
+            if (tr.steps.size() >= maxSteps) { tr.truncated = true; running = false; break; }
+            if (System.currentTimeMillis() > deadline) { tr.truncated = true; running = false; break; }
+          } else if (ev instanceof VMDeathEvent || ev instanceof VMDisconnectEvent) {
+            running = false;
+          }
+        }
+        if (running) es.resume(); else { try { vm.dispose(); } catch (Exception e) {} }
+      }
+      try { to.join(300); te.join(300); } catch (Exception e) {}
+
+      t.steps = tr.steps;
+      t.meta.put("truncated", tr.truncated);
+      t.meta.put("num_steps", tr.steps.size());
+      t.meta.put("output", out.toString());
+      return t.toJson();
+    } catch (Exception e) {
+      t.meta.put("error", e.toString());
+      t.meta.put("output", out.toString());
+      return t.toJson();
+    } finally {
+      if (vm != null) { try { vm.exit(0); } catch (Exception e) {} }
+      if (dir != null) { try { deleteDir(dir); } catch (Exception e) {} }
+    }
+  }
+
+  static Thread drain(InputStream in, StringBuilder sink) {
+    Thread th = new Thread(() -> {
+      try (BufferedReader r = new BufferedReader(new InputStreamReader(in))) {
+        String line;
+        while ((line = r.readLine()) != null) synchronized (sink) { sink.append(line).append("\n"); }
+      } catch (Exception ignore) {}
+    });
+    th.setDaemon(true); th.start(); return th;
+  }
+
+  static String publicClassName(String code) {
+    Matcher m = Pattern.compile("public\\s+(?:final\\s+|abstract\\s+)?class\\s+(\\w+)").matcher(code);
+    if (m.find()) return m.group(1);
+    Matcher m2 = Pattern.compile("\\bclass\\s+(\\w+)").matcher(code);
+    if (m2.find()) return m2.group(1);
+    return "Main";
+  }
+
+  static void deleteDir(Path dir) throws IOException {
+    if (!Files.exists(dir)) return;
+    Files.walk(dir).sorted(Comparator.reverseOrder()).forEach(p -> { try { Files.delete(p); } catch (Exception e) {} });
+  }
+
+  // ============================================================== Tracer
+  static class Tracer {
+    String[] codeLines;
+    int maxSteps;
+    boolean truncated = false;
+    List<Object> steps = new ArrayList<>();
+    int callCounter = 0;
+    Deque<Integer> callStack = new ArrayDeque<>();   // call_ids by frame
+    int prevFrameCount = 0;
+    Map<Integer, Map<String,Object>> prevLocalsByCall = new HashMap<>();
+
+    Tracer(String[] codeLines, int maxSteps) { this.codeLines = codeLines; this.maxSteps = maxSteps; }
+
+    void onStep(StepEvent se) {
+      try {
+        ThreadReference thread = se.thread();
+        int fc = thread.frameCount();
+        Location loc = se.location();
+        String method = loc.method().name();
+        int line = loc.lineNumber();
+        String codeLine = (line - 1 >= 0 && line - 1 < codeLines.length) ? codeLines[line - 1].trim() : "";
+
+        String event = "line";
+        Integer parentId = null;
+        int callId;
+        if (fc > prevFrameCount) {
+          event = "call";
+          callCounter++;
+          parentId = callStack.peek();
+          callId = callCounter;
+          callStack.push(callId);
+        } else if (fc < prevFrameCount) {
+          event = "return";
+          callId = callStack.isEmpty() ? 0 : callStack.peek();
+        } else {
+          callId = callStack.isEmpty() ? 0 : callStack.peek();
+        }
+        prevFrameCount = fc;
+
+        StackFrame frame = thread.frame(0);
+        Map<String,Object> scenes = new LinkedHashMap<>();
+        Map<String,Object> types = new LinkedHashMap<>();
+        try {
+          for (LocalVariable lv : frame.visibleVariables()) {
+            Value v = frame.getValue(lv);
+            String vt = Ser.detectType(v, lv.name());
+            types.put(lv.name(), vt);
+            scenes.put(lv.name(), Ser.scene(v, vt, lv.name(), thread));
+          }
+        } catch (AbsentInformationException ignore) {}
+
+        Map<String,Object> prev = prevLocalsByCall.getOrDefault(callId, new HashMap<>());
+        List<Object> highlight = new ArrayList<>();
+        for (Map.Entry<String,Object> e : scenes.entrySet())
+          if (!prev.containsKey(e.getKey()) || !Objects.equals(prev.get(e.getKey()), e.getValue()))
+            highlight.add(e.getKey());
+
+        List<Object> semantic = Sem.build(codeLine, prev, scenes, event, method);
+
+        String scope = null;
+        if (event.equals("call")) scope = "function";
+        else if (codeLine.startsWith("for") || codeLine.startsWith("while")) scope = "loop";
+        else if (codeLine.startsWith("if") || codeLine.startsWith("} else") || codeLine.startsWith("else")) scope = "conditional";
+
+        // call stack (frames)
+        List<Object> stack = new ArrayList<>();
+        try {
+          List<StackFrame> frames = thread.frames();
+          for (int i = frames.size() - 1; i >= 0; i--) {
+            StackFrame f = frames.get(i);
+            Map<String,Object> sf = new LinkedHashMap<>();
+            sf.put("function", f.location().method().name());
+            Map<String,Object> argMap = new LinkedHashMap<>();
+            try {
+              for (LocalVariable lv : f.location().method().arguments()) {
+                Value av = f.getValue(lv);
+                argMap.put(lv.name(), Ser.scene(av, Ser.detectType(av, lv.name()), lv.name(), thread));
+              }
+            } catch (Exception ignore) {}
+            sf.put("args", argMap);
+            stack.add(sf);
+          }
+        } catch (Exception ignore) {}
+
+        Map<String,Object> step = new LinkedHashMap<>();
+        step.put("i", steps.size());
+        step.put("event", event);
+        step.put("line", line);
+        step.put("function", method);
+        step.put("code", codeLine);
+        step.put("locals", scenes);
+        step.put("var_types", types);
+        step.put("highlight_vars", highlight);
+        step.put("scope", scope);
+        step.put("depth", fc);
+        step.put("call_id", callId);
+        step.put("parent_id", parentId);
+        step.put("semantic", semantic);
+        step.put("call_stack", stack);
+        if ("loop".equals(scope)) step.put("loop_meta", Scope.loopMeta(codeLine, frame));
+        steps.add(step);
+        prevLocalsByCall.put(callId, scenes);
+
+        if (event.equals("return") && !callStack.isEmpty()) callStack.pop();
+      } catch (Exception ignore) {}
+    }
+  }
+}
+
+// ===================================================================== Trace
+class Trace {
+  Map<String,Object> meta = new LinkedHashMap<>();
+  List<Object> steps = new ArrayList<>();
+  String toJson() {
+    Map<String,Object> root = new LinkedHashMap<>();
+    root.put("meta", meta);
+    root.put("steps", steps);
+    return Json.enc(root);
+  }
+}
+
+// ============================================================ JDI serializer
+class Ser {
+  static final String[] VAL = {"val","value","data","key","item"};
+  static final String[] NEXT = {"next","nxt","next_node"};
+  static final String[] PREV = {"prev","previous","prev_node"};
+  static final String[] LEFT = {"left","leftChild","lc","l"};
+  static final String[] RIGHT = {"right","rightChild","rc","r"};
+
+  static java.util.Set<String> STACK = new HashSet<>(Arrays.asList("stack","st","stk"));
+  static java.util.Set<String> QUEUE = new HashSet<>(Arrays.asList("q","queue","que","dq","deque","frontier"));
+  static java.util.Set<String> DP = new HashSet<>(Arrays.asList("dp","memo","cache","table","cost"));
+
+  static java.util.Set<String> fieldNames(ObjectReference o) {
+    java.util.Set<String> s = new HashSet<>();
+    for (Field f : o.referenceType().allFields()) if (!f.isStatic()) s.add(f.name());
+    return s;
+  }
+  static Value field(ObjectReference o, String[] names) {
+    for (String n : names) {
+      Field f = o.referenceType().fieldByName(n);
+      if (f != null && !f.isStatic()) return o.getValue(f);
+    }
+    return null;
+  }
+
+  static String detectType(Value v, String name) {
+    String low = name == null ? "" : name.toLowerCase();
+    if (v == null) return "primitive";
+    if (v instanceof ArrayReference) {
+      ArrayReference ar = (ArrayReference) v;
+      boolean twoD = ar.length() > 0 && ar.getValue(0) instanceof ArrayReference;
+      if (twoD) return DP.contains(low) ? "dp_grid" : "matrix";
+      if (STACK.contains(low)) return "stack";
+      if (QUEUE.contains(low)) return "queue";
+      if (DP.contains(low)) return "dp_array";
+      return "array";
+    }
+    if (v instanceof StringReference) return "primitive";
+    if (v instanceof PrimitiveValue) return "primitive";
+    if (v instanceof ObjectReference) {
+      ObjectReference o = (ObjectReference) v;
+      String rt = o.referenceType().name();
+      if (rt.startsWith("java.util.")) {
+        if (rt.contains("Stack")) return "stack";
+        if (rt.contains("Deque") || rt.contains("Queue") || rt.contains("LinkedList")) return "queue";
+        if (rt.contains("Set")) return "set";
+        if (rt.contains("Map")) return "object";
+        if (rt.contains("List")) return "array";
+        return "object";
+      }
+      java.util.Set<String> fns = fieldNames(o);
+      if (!java.util.Collections.disjoint(fns, Arrays.asList(NEXT)))
+        return !java.util.Collections.disjoint(fns, Arrays.asList(PREV)) ? "doubly_linked_list" : "linked_list";
+      if (!java.util.Collections.disjoint(fns, Arrays.asList(LEFT)) &&
+          !java.util.Collections.disjoint(fns, Arrays.asList(RIGHT))) {
+        if (fns.contains("color") || fns.contains("isRed")) return "red_black_tree";
+        if (fns.contains("height") || fns.contains("bf")) return "avl_tree";
+        return "binary_tree";
+      }
+      return "object";
+    }
+    return "object";
+  }
+
+  static Object scene(Value v, String vtype, String name, ThreadReference thread) {
+    try {
+      switch (vtype) {
+        case "linked_list": case "doubly_linked_list": return linkedList((ObjectReference) v);
+        case "binary_tree": case "avl_tree": case "red_black_tree":
+          return map("type", vtype, "root", tree((ObjectReference) v, vtype, new HashSet<>(), 0));
+        case "matrix": case "dp_grid": return map("type", vtype, "rows", arrayList((ArrayReference) v, thread));
+        case "array": case "dp_array":
+          if (v instanceof ArrayReference) return arrayList((ArrayReference) v, thread);
+          return collectionToList(v, thread);            // java.util.List
+        case "stack": case "queue": case "deque": case "heap":
+          Object vals = (v instanceof ArrayReference) ? arrayList((ArrayReference) v, thread) : collectionToList(v, thread);
+          return map("type", vtype, "values", vals);
+        case "set": return map("type", "set", "values", collectionToList(v, thread));
+        case "primitive": return prim(v);
+        default: return objScene(v, thread);
+      }
+    } catch (Exception e) { return map("type", vtype, "error", String.valueOf(e)); }
+  }
+
+  static Object prim(Value v) {
+    if (v == null) return null;
+    if (v instanceof StringReference) return ((StringReference) v).value();
+    if (v instanceof BooleanValue) return ((BooleanValue) v).value();
+    if (v instanceof CharValue) return String.valueOf(((CharValue) v).value());
+    if (v instanceof IntegerValue) return ((IntegerValue) v).value();
+    if (v instanceof LongValue) return ((LongValue) v).value();
+    if (v instanceof ShortValue) return (int)((ShortValue) v).value();
+    if (v instanceof ByteValue) return (int)((ByteValue) v).value();
+    if (v instanceof FloatValue) return (double)((FloatValue) v).value();
+    if (v instanceof DoubleValue) return ((DoubleValue) v).value();
+    return v.toString();
+  }
+
+  static List<Object> arrayList(ArrayReference ar, ThreadReference thread) {
+    List<Object> out = new ArrayList<>();
+    int n = Math.min(ar.length(), MaxNodes());
+    for (int i = 0; i < n; i++) {
+      Value e = ar.getValue(i);
+      if (e instanceof ArrayReference) out.add(arrayList((ArrayReference) e, thread));
+      else if (e instanceof PrimitiveValue || e instanceof StringReference || e == null) out.add(prim(e));
+      else out.add(prim(e) == null ? objScene(e, thread) : prim(e));
+    }
+    return out;
+  }
+  static int MaxNodes() { return 500; }
+
+  static Object collectionToList(Value v, ThreadReference thread) {
+    if (!(v instanceof ObjectReference)) return new ArrayList<>();
+    ObjectReference o = (ObjectReference) v;
+    try {
+      List<Method> ms = o.referenceType().methodsByName("toArray");
+      Method m0 = null;
+      for (Method m : ms) if (m.argumentTypeNames().isEmpty()) m0 = m;
+      if (m0 != null) {
+        Value r = o.invokeMethod(thread, m0, new ArrayList<>(), ObjectReference.INVOKE_SINGLE_THREADED);
+        if (r instanceof ArrayReference) return arrayList((ArrayReference) r, thread);
+      }
+    } catch (Exception ignore) {}
+    return Arrays.asList(invokeToString(o, thread));
+  }
+
+  static Object invokeToString(ObjectReference o, ThreadReference thread) {
+    try {
+      List<Method> ms = o.referenceType().methodsByName("toString");
+      for (Method m : ms) if (m.argumentTypeNames().isEmpty()) {
+        Value r = o.invokeMethod(thread, m, new ArrayList<>(), ObjectReference.INVOKE_SINGLE_THREADED);
+        if (r instanceof StringReference) return ((StringReference) r).value();
+      }
+    } catch (Exception ignore) {}
+    return "<object>";
+  }
+
+  static Object objScene(Value v, ThreadReference thread) {
+    if (v == null) return null;
+    if (v instanceof ObjectReference) {
+      ObjectReference o = (ObjectReference) v;
+      if (o.referenceType().name().startsWith("java.util."))
+        return map("type", "object", "repr", invokeToString(o, thread));
+      return map("type", "object");
+    }
+    return prim(v);
+  }
+
+  static Object linkedList(ObjectReference head) {
+    // unwrap container with a head field
+    if (head != null && Collections.disjoint(fieldNames(head), Arrays.asList(NEXT))) {
+      Value inner = field(head, new String[]{"head","root","front","first"});
+      if (inner instanceof ObjectReference) head = (ObjectReference) inner;
+    }
+    List<Object> nodes = new ArrayList<>();
+    java.util.Set<Long> seen = new HashSet<>();
+    boolean doubly = false, circular = false;
+    ObjectReference cur = head;
+    while (cur != null && nodes.size() < MaxNodes()) {
+      if (seen.contains(cur.uniqueID())) { circular = true; break; }
+      seen.add(cur.uniqueID());
+      if (field(cur, PREV) != null) doubly = true;
+      Map<String,Object> node = new LinkedHashMap<>();
+      node.put("id", nodes.size());
+      node.put("value", prim(field(cur, VAL)));
+      node.put("next", null); node.put("prev", null);
+      nodes.add(node);
+      Value nx = field(cur, NEXT);
+      cur = (nx instanceof ObjectReference) ? (ObjectReference) nx : null;
+    }
+    for (int i = 0; i < nodes.size(); i++) {
+      Map<String,Object> nd = (Map<String,Object>) nodes.get(i);
+      if (i + 1 < nodes.size()) nd.put("next", i + 1);
+      if (doubly && i > 0) nd.put("prev", i - 1);
+    }
+    Map<String,Object> out = new LinkedHashMap<>();
+    out.put("type", doubly ? "doubly_linked_list" : "linked_list");
+    out.put("circular", circular);
+    out.put("nodes", nodes);
+    out.put("head", nodes.isEmpty() ? null : 0);
+    return out;
+  }
+
+  static Object tree(ObjectReference node, String kind, java.util.Set<Long> seen, int depth) {
+    if (node == null || depth > 64 || seen.contains(node.uniqueID())) return null;
+    seen.add(node.uniqueID());
+    Map<String,Object> out = new LinkedHashMap<>();
+    out.put("val", prim(field(node, VAL)));
+    Value l = field(node, LEFT), r = field(node, RIGHT);
+    out.put("left", l instanceof ObjectReference ? tree((ObjectReference) l, kind, seen, depth + 1) : null);
+    out.put("right", r instanceof ObjectReference ? tree((ObjectReference) r, kind, seen, depth + 1) : null);
+    if (kind.equals("red_black_tree")) { Value c = field(node, new String[]{"color","isRed"}); out.put("color", String.valueOf(prim(c))); }
+    if (kind.equals("avl_tree")) out.put("height", prim(field(node, new String[]{"height","bf"})));
+    return out;
+  }
+
+  @SafeVarargs
+  static Map<String,Object> map(Object... kv) {
+    Map<String,Object> m = new LinkedHashMap<>();
+    for (int i = 0; i + 1 < kv.length; i += 2) m.put(String.valueOf(kv[i]), kv[i + 1]);
+    return m;
+  }
+}
+
+// ============================================================ semantic events
+class Sem {
+  static List<Object> build(String code, Map<String,Object> prev, Map<String,Object> cur, String event, String fn) {
+    List<Object> ev = new ArrayList<>();
+    if (fn != null && !fn.equals("main")) {
+      if (event.equals("call")) ev.add(Ser.map("kind", "recursion_enter"));
+      else if (event.equals("return")) ev.add(Ser.map("kind", "recursion_exit"));
+    }
+    String tag = classify(code);
+    if (tag != null) ev.add(Ser.map("kind", tag));
+    for (Map.Entry<String,Object> e : cur.entrySet()) {
+      Object p = prev.get(e.getKey());
+      if (p instanceof List && e.getValue() instanceof List) {
+        List<?> a = (List<?>) p, b = (List<?>) e.getValue();
+        if (a.size() == b.size()) {
+          List<Integer> diff = new ArrayList<>();
+          for (int i = 0; i < a.size(); i++) if (!Objects.equals(a.get(i), b.get(i))) diff.add(i);
+          if (diff.size() == 2 && Objects.equals(a.get(diff.get(0)), b.get(diff.get(1)))
+              && Objects.equals(a.get(diff.get(1)), b.get(diff.get(0)))) {
+            ev.add(Ser.map("target", e.getKey(), "kind", "swap", "i", diff.get(0), "j", diff.get(1)));
+          } else for (int idx : diff)
+            ev.add(Ser.map("target", e.getKey(), "kind", "write", "index", idx, "to", b.get(idx)));
+        }
+      }
+    }
+    return ev;
+  }
+  static String classify(String s) {
+    if (s.startsWith("if") || s.startsWith("while") || s.startsWith("} else if")) return "compare";
+    if (s.startsWith("return")) return "return";
+    if (s.contains(".add(") || s.contains(".push(") || s.contains(".offer(")) return "push";
+    if (s.contains(".pop(") || s.contains(".poll(") || s.contains(".remove(")) return "pop";
+    return null;
+  }
+}
+
+// ============================================================ scope (loops)
+class Scope {
+  static Map<String,Object> loopMeta(String code, StackFrame frame) {
+    Map<String,Object> m = new LinkedHashMap<>();
+    if (code.startsWith("for")) { m.put("kind", "for_in"); m.put("vars", new ArrayList<>()); m.put("iterable", code); }
+    else { m.put("kind", "while"); m.put("condition", code.replaceAll("^while\\s*\\(", "").replaceAll("\\)\\s*\\{?$", "")); }
+    return m;
+  }
+}
+
+// ============================================================ static analysis
+class Analyze {
+  static Map<String,Object> run(String code) {
+    List<Object> hints = new ArrayList<>();
+    String primary = null;
+    boolean twoPtr = code.matches("(?s).*\\b(left|lo|l)\\b.*") && code.matches("(?s).*\\b(right|hi|r)\\b.*");
+    boolean dp = code.matches("(?s).*\\b(dp|memo)\\b.*");
+    boolean bfs = code.contains("Queue") || code.contains("LinkedList") || code.contains("ArrayDeque");
+    boolean rec = code.matches("(?s).*\\breturn\\b.*\\w+\\s*\\(.*");
+    if (dp) { primary = "dynamic_programming"; hints.add(Ser.map("pattern","dynamic_programming","confidence",0.7)); }
+    else if (bfs && code.contains("visited")) { primary = "bfs"; hints.add(Ser.map("pattern","bfs","confidence",0.6)); }
+    else if (twoPtr) { primary = "two_pointer"; hints.add(Ser.map("pattern","two_pointer","confidence",0.55)); }
+    Map<String,Object> a = new LinkedHashMap<>();
+    a.put("hints", hints); a.put("primary", primary);
+    return a;
+  }
+}
+
+// ============================================================ tiny JSON
+class Json {
+  static String q(String s) {
+    StringBuilder b = new StringBuilder("\"");
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      switch (c) {
+        case '"': b.append("\\\""); break;
+        case '\\': b.append("\\\\"); break;
+        case '\n': b.append("\\n"); break;
+        case '\r': b.append("\\r"); break;
+        case '\t': b.append("\\t"); break;
+        default: if (c < 0x20) b.append(String.format("\\u%04x", (int) c)); else b.append(c);
+      }
+    }
+    return b.append("\"").toString();
+  }
+  static String enc(Object o) {
+    if (o == null) return "null";
+    if (o instanceof String) return q((String) o);
+    if (o instanceof Boolean || o instanceof Integer || o instanceof Long) return o.toString();
+    if (o instanceof Double || o instanceof Float) {
+      double d = ((Number) o).doubleValue();
+      if (d == Math.floor(d) && !Double.isInfinite(d)) return String.valueOf((long) d);
+      return o.toString();
+    }
+    if (o instanceof Number) return o.toString();
+    if (o instanceof Map) {
+      StringBuilder b = new StringBuilder("{"); boolean first = true;
+      for (Map.Entry<?,?> e : ((Map<?,?>) o).entrySet()) {
+        if (!first) b.append(","); first = false;
+        b.append(q(String.valueOf(e.getKey()))).append(":").append(enc(e.getValue()));
+      }
+      return b.append("}").toString();
+    }
+    if (o instanceof Iterable) {
+      StringBuilder b = new StringBuilder("["); boolean first = true;
+      for (Object e : (Iterable<?>) o) { if (!first) b.append(","); first = false; b.append(enc(e)); }
+      return b.append("]").toString();
+    }
+    return q(o.toString());
+  }
+
+  // minimal parser (objects, arrays, strings, numbers, true/false/null)
+  static int pos;
+  static String src;
+  static Object parse(String s) { src = s; pos = 0; ws(); return val(); }
+  static Object val() {
+    ws(); char c = src.charAt(pos);
+    if (c == '{') return obj();
+    if (c == '[') return arr();
+    if (c == '"') return s();
+    if (c == 't') { pos += 4; return Boolean.TRUE; }
+    if (c == 'f') { pos += 5; return Boolean.FALSE; }
+    if (c == 'n') { pos += 4; return null; }
+    return num();
+  }
+  static Map<String,Object> obj() {
+    Map<String,Object> m = new LinkedHashMap<>(); pos++; ws();
+    if (src.charAt(pos) == '}') { pos++; return m; }
+    while (true) {
+      ws(); String k = s(); ws(); pos++; /* colon */ Object v = val(); m.put(k, v); ws();
+      char c = src.charAt(pos++); if (c == '}') break;
+    }
+    return m;
+  }
+  static List<Object> arr() {
+    List<Object> l = new ArrayList<>(); pos++; ws();
+    if (src.charAt(pos) == ']') { pos++; return l; }
+    while (true) { Object v = val(); l.add(v); ws(); char c = src.charAt(pos++); if (c == ']') break; }
+    return l;
+  }
+  static String s() {
+    StringBuilder b = new StringBuilder(); pos++; // opening quote
+    while (true) {
+      char c = src.charAt(pos++);
+      if (c == '"') break;
+      if (c == '\\') {
+        char e = src.charAt(pos++);
+        switch (e) {
+          case 'n': b.append('\n'); break; case 't': b.append('\t'); break;
+          case 'r': b.append('\r'); break; case '"': b.append('"'); break;
+          case '\\': b.append('\\'); break; case '/': b.append('/'); break;
+          case 'b': b.append('\b'); break; case 'f': b.append('\f'); break;
+          case 'u': b.append((char) Integer.parseInt(src.substring(pos, pos + 4), 16)); pos += 4; break;
+          default: b.append(e);
+        }
+      } else b.append(c);
+    }
+    return b.toString();
+  }
+  static Object num() {
+    int start = pos;
+    while (pos < src.length() && "-+0123456789.eE".indexOf(src.charAt(pos)) >= 0) pos++;
+    String n = src.substring(start, pos);
+    if (n.contains(".") || n.contains("e") || n.contains("E")) return Double.parseDouble(n);
+    return Long.parseLong(n);
+  }
+  static void ws() { while (pos < src.length() && Character.isWhitespace(src.charAt(pos))) pos++; }
+}

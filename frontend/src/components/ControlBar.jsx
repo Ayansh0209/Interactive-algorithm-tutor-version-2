@@ -2,15 +2,16 @@ import React, { useState } from 'react'
 import { useTheme } from '../App'
 import { useTrace } from '../contexts/TraceContext'
 
-function ControlBar({  }) {
+function ControlBar() {
   const { isDarkMode } = useTheme()
-  const { currentStep, traceSteps } = useTrace()
-  const [speed,setspeed] = useState(1.0)
-   const getPlayDelay = () => {
+  const { currentStep, traceSteps, showFoldedSteps, setShowFoldedSteps } = useTrace()
+  const [speed, setspeed] = useState(1.0)
+  
+  const getPlayDelay = () => {
     return Math.round(800 / speed)
   } 
 
-   React.useEffect(() => {
+  React.useEffect(() => {
     window.getPlayDelay = getPlayDelay
   }, [speed])
 
@@ -22,6 +23,7 @@ function ControlBar({  }) {
     <div className={`${themeClasses} border-b px-6 py-4`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-8">
+          {/* Speed Control */}
           <div className="flex items-center space-x-4">
             <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
               Speed
@@ -46,18 +48,33 @@ function ControlBar({  }) {
             </div>
           </div>
 
+          {/* Step Counter */}
           <div className="flex items-center space-x-2">
             <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
               Step
             </label>
             <span className="text-sm font-medium text-green-400">
-              {currentStep +1} / {traceSteps.length}
+              {traceSteps.length > 0 ? currentStep + 1 : 0} / {traceSteps.length}
             </span>
+          </div>
+
+          {/* Loop Folding Toggle */}
+          <div className="flex items-center space-x-2 border-l pl-6 border-gray-800">
+            <input
+              type="checkbox"
+              id="showFolded"
+              checked={showFoldedSteps}
+              onChange={(e) => setShowFoldedSteps(e.target.checked)}
+              className="w-4 h-4 text-green-600 bg-gray-800 border-gray-700 rounded focus:ring-green-500 focus:ring-offset-gray-900 focus:ring-2"
+            />
+            <label htmlFor="showFolded" className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} cursor-pointer select-none`}>
+              Show Detailed Loop Iterations
+            </label>
           </div>
         </div>
 
-        <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-          Algorithm: N-Queens Problem
+        <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} font-mono`}>
+          Tutor Engine: Active Tracing Mode
         </div>
       </div>
     </div>

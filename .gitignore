@@ -1,4 +1,33 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Debug / scratch output
 debug_output.json
-__pycache__
-debug_output.json
+debug_dsa_output.json
+
+# Dev docs & specs (not production code)
+DSA_Visualizer_Architecture_Spec.md
+README.md
+backend/readme.md
+backend/checklist.md
+
+# Old / legacy backend files (superseded by engine + worker)
+backend/flaskServer.py
+backend/tracer.py
+
+# Test / scratch scripts
+backend/test.py
+backend/test_dsa.py
+backend/edge_test.py
+backend/inf_test.py
+backend/wtest.py
+backend/reg.py
+backend/stdin_test.py
+backend/httptest.py
+
+# Agent / AI tooling
+.agents/

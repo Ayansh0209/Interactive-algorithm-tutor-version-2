@@ -1,38 +1,35 @@
 /**
- * Python language route.
- *
- * Proxies to the warm Python trace worker instead of cold-spawning a process
- * per request. This is the single change that removes the old start-up latency.
+ * Java language route. Proxies to the warm Java trace worker (JDI).
+ * Same contract as the Python route -- the frontend can't tell the difference.
  */
 
 const express = require("express");
 const axios = require("axios");
 
 const router = express.Router();
-const WORKER_URL = process.env.WORKER_URL || "http://127.0.0.1:8000";
+const JAVA_WORKER_URL = process.env.JAVA_WORKER_URL || "http://127.0.0.1:8001";
 
 router.post("/run", async (req, res) => {
   const { code, max_steps, stdin } = req.body || {};
   if (!code || !code.trim()) {
     return res.status(400).json({ error: "No code provided." });
   }
-
   try {
     const { data } = await axios.post(
-      `${WORKER_URL}/trace`,
+      `${JAVA_WORKER_URL}/trace`,
       { code, max_steps: max_steps || 5000, stdin: stdin || "" },
-      { timeout: 20000 }
+      { timeout: 30000 }
     );
     return res.json(data);
   } catch (err) {
     if (err.code === "ECONNREFUSED") {
       return res.status(503).json({
-        error: "Trace worker is not running.",
-        details: `Start it: uvicorn worker.app:app --port 8000 (expected ${WORKER_URL})`,
+        error: "Java trace worker is not running.",
+        details: `Start it: java JavaWorker.java --serve 8001 (expected ${JAVA_WORKER_URL})`,
       });
     }
     return res.status(500).json({
-      error: "Trace request failed.",
+      error: "Java trace request failed.",
       details: (err.response && err.response.data) || err.message,
     });
   }
