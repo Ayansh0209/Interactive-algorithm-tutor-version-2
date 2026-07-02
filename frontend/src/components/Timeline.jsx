@@ -1,59 +1,87 @@
-// Playback timeline: scrubber + transport controls, plus the two features that
-// tame step-explosion: "semantic only" (collapse to meaningful events) and
-// "focus" a single function so big runs become watchable.
+// Playback timeline: transport + scrubber, plus the two features that tame
+// step-explosion: "key steps only" (semantic events) and "focus" a function.
+// Keyboard: ←/→ step, Space play/pause, Home/End jump (when not typing).
 
-import { IconButton, Toggle, Select } from "./ui";
+import { useEffect } from "react";
+import { Toggle, Select, Icon, Kbd, cx } from "./ui";
 
 export default function Timeline({ pb }) {
   const {
     cursor, setCursor, visibleCount, playing, setPlaying, speed, setSpeed,
-    next, prev, reset, semanticOnly, setSemanticOnly, focusFn, setFocusFn, functions, current,
+    next, prev, reset, toEnd, semanticOnly, setSemanticOnly, focusFn, setFocusFn, functions, current,
   } = pb;
 
+  // Keyboard controls (ignored while typing in a field).
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); next(); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
+      else if (e.key === " ") { e.preventDefault(); setPlaying((p) => !p); }
+      else if (e.key === "Home") { e.preventDefault(); reset(); }
+      else if (e.key === "End") { e.preventDefault(); toEnd(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next, prev, setPlaying, reset, toEnd]);
+
+  const Tbtn = ({ icon, title, onClick, disabled, primary }) => (
+    <button
+      title={title} aria-label={title} onClick={onClick} disabled={disabled}
+      className={cx(
+        "grid place-items-center h-9 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 disabled:opacity-30 disabled:cursor-not-allowed",
+        primary ? "w-10 bg-brand text-on-brand hover:bg-brand-strong" : "w-9 bg-fg/[0.05] text-fg-muted hover:text-fg hover:bg-fg/[0.09]"
+      )}
+    >
+      <Icon name={icon} size={16} />
+    </button>
+  );
+
   return (
-    <div className="border-t border-white/10 bg-white/[0.02] px-4 py-2.5 space-y-2">
+    <div className="border-t border-border bg-surface px-4 py-2.5 space-y-2 shrink-0">
       <div className="flex items-center gap-2">
-        <IconButton title="Reset" onClick={reset}>|&lt;</IconButton>
-        <IconButton title="Previous" onClick={prev} disabled={cursor === 0}>&lt;</IconButton>
-        <IconButton title={playing ? "Pause" : "Play"} onClick={() => setPlaying(!playing)} active={playing}>
-          {playing ? "||" : ">"}
-        </IconButton>
-        <IconButton title="Next" onClick={next} disabled={cursor >= visibleCount - 1}>&gt;</IconButton>
+        <Tbtn icon="skip-back" title="Reset (Home)" onClick={reset} disabled={cursor === 0} />
+        <Tbtn icon="step-back" title="Previous (←)" onClick={prev} disabled={cursor === 0} />
+        <Tbtn icon={playing ? "pause" : "play"} title={playing ? "Pause (Space)" : "Play (Space)"} onClick={() => setPlaying(!playing)} primary />
+        <Tbtn icon="step-forward" title="Next (→)" onClick={next} disabled={cursor >= visibleCount - 1} />
+        <Tbtn icon="skip-forward" title="End (End)" onClick={toEnd} disabled={cursor >= visibleCount - 1} />
 
         <input
-          type="range"
-          min={0}
-          max={Math.max(0, visibleCount - 1)}
-          value={cursor}
+          type="range" min={0} max={Math.max(0, visibleCount - 1)} value={cursor}
           onChange={(e) => setCursor(Number(e.target.value))}
-          className="flex-1 accent-indigo-500"
+          aria-label="Timeline position"
+          className="flex-1 accent-[var(--brand)]"
         />
-        <span className="text-xs text-white/50 tabular-nums w-20 text-right">
+        <span className="text-2xs text-fg-muted tabular-nums w-16 text-right">
           {visibleCount ? cursor + 1 : 0} / {visibleCount}
         </span>
       </div>
 
       <div className="flex items-center gap-4 flex-wrap">
         <Toggle checked={semanticOnly} onChange={setSemanticOnly} label="Key steps only" />
-        <div className="flex items-center gap-1.5 text-xs text-white/50">
+        <div className="flex items-center gap-1.5 text-2xs text-fg-muted">
           Focus:
           <Select value={focusFn} onChange={setFocusFn} options={functions} placeholder="all code" />
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-white/50">
+        <div className="flex items-center gap-1 text-2xs text-fg-muted">
           Speed:
           {[0.5, 1, 2, 4].map((s) => (
             <button
               key={s}
               onClick={() => setSpeed(s)}
-              className={`px-1.5 rounded ${speed === s ? "text-indigo-300 font-semibold" : "hover:text-white/80"}`}
+              className={cx("px-1.5 h-6 rounded hover:text-fg transition-colors", speed === s ? "text-brand font-semibold" : "")}
             >
               {s}x
             </button>
           ))}
         </div>
+        <div className="hidden xl:flex items-center gap-1 text-3xs text-fg-faint">
+          <Kbd>←</Kbd><Kbd>→</Kbd> step <Kbd>Space</Kbd> play
+        </div>
         {current && (
-          <span className="text-xs text-white/40 ml-auto font-mono">
-            line {current.line} - {current.function} - depth {current.depth}
+          <span className="text-2xs text-fg-faint ml-auto font-mono">
+            line {current.line} · {current.function} · depth {current.depth}
           </span>
         )}
       </div>

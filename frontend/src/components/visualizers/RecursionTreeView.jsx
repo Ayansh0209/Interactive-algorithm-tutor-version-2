@@ -1,9 +1,11 @@
 // Recursion tree built directly from the step stream (call_id / parent_id).
 // Each function call is a node; the tree grows as calls happen, exactly like
-// sketching recursion by hand. The active call path is highlighted as you
-// scrub, and resolved (returned) calls are dimmed.
+// sketching recursion by hand. The active call is highlighted as you scrub, and
+// resolved (returned) calls are dimmed.
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
+import { cx } from "../ui";
 
 function buildCalls(steps) {
   const byId = new Map();
@@ -11,14 +13,7 @@ function buildCalls(steps) {
     const s = steps[i];
     if (s.event === "call" && s.function !== "<module>") {
       const top = (s.call_stack || [])[s.call_stack.length - 1] || {};
-      byId.set(s.call_id, {
-        id: s.call_id,
-        parent: s.parent_id == null ? 0 : s.parent_id,
-        fn: s.function,
-        args: top.args || {},
-        enter: i,
-        exit: null,
-      });
+      byId.set(s.call_id, { id: s.call_id, parent: s.parent_id == null ? 0 : s.parent_id, fn: s.function, args: top.args || {}, enter: i, exit: null });
     } else if (s.event === "return" && byId.has(s.call_id)) {
       byId.get(s.call_id).exit = i;
     }
@@ -37,33 +32,28 @@ export default function RecursionTreeView({ steps, stepIndex }) {
       if (!childrenOf.has(n.parent)) childrenOf.set(n.parent, []);
       childrenOf.get(n.parent).push(n);
     });
-    const roots = nodes.filter((n) => !calls.has(n.parent));
     let order = 0;
     const pos = new Map();
     function place(n, depth) {
       const kids = (childrenOf.get(n.id) || []).sort((a, b) => a.enter - b.enter);
-      if (!kids.length) {
-        pos.set(n.id, { x: order++, depth });
-      } else {
+      if (!kids.length) pos.set(n.id, { x: order++, depth });
+      else {
         kids.forEach((k) => place(k, depth + 1));
         const xs = kids.map((k) => pos.get(k.id).x);
         pos.set(n.id, { x: (Math.min(...xs) + Math.max(...xs)) / 2, depth });
       }
     }
-    roots.sort((a, b) => a.enter - b.enter).forEach((r) => place(r, 0));
-    return { nodes, pos, childrenOf, roots };
+    const roots = nodes.filter((n) => !calls.has(n.parent)).sort((a, b) => a.enter - b.enter);
+    roots.forEach((r) => place(r, 0));
+    return { nodes, pos, childrenOf };
   }, [calls]);
 
   if (!layout) {
-    return (
-      <div className="px-4 py-6 text-white/30 italic text-sm">
-        No function calls in this run (recursion tree appears for recursive / nested calls).
-      </div>
-    );
+    return <div className="px-4 py-6 text-fg-faint italic text-sm">No function calls in this run (recursion tree appears for recursive / nested calls).</div>;
   }
 
   const activeCallId = steps[stepIndex]?.call_id;
-  const GAP_X = 92, GAP_Y = 64;
+  const GAP_X = 96, GAP_Y = 66;
   const maxX = Math.max(...layout.nodes.map((n) => layout.pos.get(n.id).x));
   const maxD = Math.max(...layout.nodes.map((n) => layout.pos.get(n.id).depth));
   const W = (maxX + 1) * GAP_X + 60;
@@ -72,30 +62,28 @@ export default function RecursionTreeView({ steps, stepIndex }) {
   const Y = (n) => layout.pos.get(n.id).depth * GAP_Y + 24;
 
   return (
-    <div className="px-4 py-3 overflow-auto">
+    <div className="px-4 py-3 overflow-auto scrollbar-thin">
       <svg width={W} height={H} className="overflow-visible">
         {layout.nodes.map((n) =>
-          (layout.childrenOf.get(n.id) || []).map((c) => (
-            <line key={`${n.id}-${c.id}`} x1={X(n)} y1={Y(n)} x2={X(c)} y2={Y(c)}
-              stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-          ))
+          (layout.childrenOf.get(n.id) || []).map((c) =>
+            c.enter <= stepIndex ? (
+              <line key={`${n.id}-${c.id}`} x1={X(n)} y1={Y(n)} x2={X(c)} y2={Y(c)} className="stroke-border-strong" strokeWidth="1.5" />
+            ) : null
+          )
         )}
         {layout.nodes.map((n) => {
-          const visible = n.enter <= stepIndex;
-          if (!visible) return null;
+          if (n.enter > stepIndex) return null;
           const active = n.id === activeCallId;
           const resolved = n.exit != null && n.exit <= stepIndex;
           const argStr = Object.entries(n.args).map(([k, v]) => `${k}=${fmt(v)}`).join(", ");
           return (
-            <g key={n.id} opacity={resolved && !active ? 0.45 : 1}>
-              <rect x={X(n) - 38} y={Y(n) - 14} width="76" height="28" rx="7"
-                fill={active ? "rgba(99,102,241,0.35)" : "rgba(255,255,255,0.05)"}
-                stroke={active ? "#818cf8" : "rgba(255,255,255,0.2)"} strokeWidth="1.5" />
-              <text x={X(n)} y={Y(n) + 4} textAnchor="middle" fontSize="11"
-                fontFamily="monospace" fill="#fff">
-                {`${n.fn}(${argStr})`.slice(0, 14)}
+            <motion.g key={n.id} initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: resolved && !active ? 0.4 : 1, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 28 }} style={{ transformOrigin: `${X(n)}px ${Y(n)}px` }}>
+              <rect x={X(n) - 40} y={Y(n) - 14} width="80" height="28" rx="8"
+                className={cx(active ? "fill-brand/30 stroke-brand" : resolved ? "fill-success-soft stroke-success/40" : "fill-surface-2 stroke-border-strong")} strokeWidth="1.5" />
+              <text x={X(n)} y={Y(n) + 4} textAnchor="middle" fontSize="11" className="font-mono fill-fg">
+                {`${n.fn}(${argStr})`.slice(0, 15)}
               </text>
-            </g>
+            </motion.g>
           );
         })}
       </svg>

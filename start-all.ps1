@@ -28,7 +28,7 @@ if (-not (Test-Path "$root\frontend\node_modules")) {
 Write-Host "Ensuring Python deps..."; pip install -r "$root\backend\requirements.txt" 2>$null | Out-Null
 
 # launch each service in its own window
-Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend'; uvicorn worker.app:app --port 8000"
+Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend'; python -m uvicorn worker.app:app --port 8000"
 if ($hasJava) {
   Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend\java-worker'; java JavaWorker.java --serve 8001"
 }

@@ -12,8 +12,8 @@ export default function Stage({ trace, current, stepIndex }) {
   const hasCalls = steps.some((s) => s.event === "call" && s.function !== "<module>");
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-1 px-3 pt-3">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex items-center gap-1 px-3 pt-3 shrink-0">
         <TabButton active={tab === "structures"} onClick={() => setTab("structures")}>
           Structures
         </TabButton>
@@ -28,7 +28,7 @@ export default function Stage({ trace, current, stepIndex }) {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto scrollbar-thin">
         {tab === "structures" ? (
           <VariablesPanel step={current} />
         ) : (
@@ -44,8 +44,8 @@ function TabButton({ active, onClick, disabled, children }) {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-30 ${
-        active ? "bg-indigo-600 text-white" : "bg-white/5 text-white/60 hover:bg-white/10"
+      className={`px-3 py-1.5 rounded-lg text-2xs font-medium transition-colors disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 ${
+        active ? "bg-brand text-on-brand" : "bg-fg/[0.05] text-fg-muted hover:text-fg hover:bg-fg/[0.09]"
       }`}
     >
       {children}

@@ -1,31 +1,25 @@
 // binary_tree / avl_tree / red_black_tree / segment_tree / nary_tree -> SVG tree.
 // A single layout routine positions nodes by in-order x and depth y, then draws
-// edges + circles. Red-black nodes are colored; AVL nodes show height.
+// edges + circles. Red-black nodes are colored; AVL nodes show height. Nodes
+// pop in with a spring.
+
+import { motion } from "framer-motion";
+import { cx } from "../ui";
 
 function collect(root, kind) {
-  // Returns {nodes:[{id,label,depth,xOrder,color}], edges:[[parentId,childId]]}
   const nodes = [];
   const edges = [];
   let order = 0;
-
-  function children(n) {
-    if (kind === "nary_tree") return (n.children || []).filter(Boolean);
-    return [n.left, n.right].filter(Boolean);
-  }
-  function label(n) {
-    if (kind === "segment_tree") return `${n.val}\n[${n.start},${n.end}]`;
-    return String(n.val);
-  }
+  const children = (n) => (kind === "nary_tree" ? (n.children || []).filter(Boolean) : [n.left, n.right].filter(Boolean));
+  const label = (n) => (kind === "segment_tree" ? `${n.val}\n[${n.start},${n.end}]` : String(n.val));
 
   function walk(n, depth) {
     if (!n) return null;
     const id = nodes.length;
     const node = { id, depth, color: n.color, height: n.height, x: 0 };
     nodes.push(node);
-    // In-order placement: left subtree, self, right subtree.
     const kids = children(n);
     if (kind !== "nary_tree" && kids.length) {
-      // binary: place left, then self, then right
       const leftChild = n.left ? walk(n.left, depth + 1) : null;
       node.x = order++;
       const rightChild = n.right ? walk(n.right, depth + 1) : null;
@@ -48,13 +42,12 @@ function collect(root, kind) {
 export default function TreeView({ value }) {
   const root = value?.root;
   const kind = value?.type || "binary_tree";
-  if (!root) return <div className="px-4 py-3 text-white/30 italic text-sm">empty tree</div>;
+  if (!root) return <div className="px-4 py-3 text-fg-faint italic text-sm">empty tree</div>;
 
   const { nodes, edges } = collect(root, kind);
   if (!nodes.length) return null;
 
-  const GAP_X = 56;
-  const GAP_Y = 70;
+  const GAP_X = 58, GAP_Y = 72;
   const maxX = Math.max(...nodes.map((n) => n.x), 0);
   const maxDepth = Math.max(...nodes.map((n) => n.depth), 0);
   const W = (maxX + 1) * GAP_X + 40;
@@ -63,39 +56,27 @@ export default function TreeView({ value }) {
   const py = (n) => n.depth * GAP_Y + 26;
 
   return (
-    <div className="px-4 py-3 overflow-auto">
+    <div className="px-4 py-3 overflow-auto scrollbar-thin">
       <svg width={W} height={H} className="overflow-visible">
         {edges.map(([a, b], i) => (
-          <line
-            key={i}
-            x1={px(nodes[a])} y1={py(nodes[a])}
-            x2={px(nodes[b])} y2={py(nodes[b])}
-            stroke="rgba(255,255,255,0.18)" strokeWidth="1.5"
-          />
+          <line key={i} x1={px(nodes[a])} y1={py(nodes[a])} x2={px(nodes[b])} y2={py(nodes[b])} className="stroke-border-strong" strokeWidth="1.5" />
         ))}
         {nodes.map((n) => {
           const red = n.color === "red";
           const black = n.color === "black";
+          const fill = red ? "fill-danger" : black ? "fill-fg/80" : "fill-cat-tree/20";
+          const stroke = red ? "stroke-danger" : black ? "stroke-fg/60" : "stroke-cat-tree";
+          const textCls = red || black ? "fill-on-brand" : "fill-fg";
           return (
-            <g key={n.id}>
-              <circle
-                cx={px(n)} cy={py(n)} r="17"
-                fill={red ? "#e11d48" : black ? "#1e293b" : "rgba(99,102,241,0.18)"}
-                stroke={red ? "#fb7185" : "rgba(255,255,255,0.35)"}
-                strokeWidth="1.5"
-              />
-              <text
-                x={px(n)} y={py(n) + 4} textAnchor="middle"
-                fontSize="12" fill="#fff" fontFamily="monospace"
-              >
+            <motion.g key={n.id} initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 380, damping: 26, delay: Math.min(n.id * 0.012, 0.25) }} style={{ transformOrigin: `${px(n)}px ${py(n)}px` }}>
+              <circle cx={px(n)} cy={py(n)} r="17" className={cx(fill, stroke)} strokeWidth="1.75" />
+              <text x={px(n)} y={py(n) + 4} textAnchor="middle" fontSize="12" className={cx("font-mono", textCls)}>
                 {String(n.label).split("\n")[0]}
               </text>
               {n.height != null && (
-                <text x={px(n) + 20} y={py(n) - 12} fontSize="9" fill="#a5b4fc">
-                  h{n.height}
-                </text>
+                <text x={px(n) + 20} y={py(n) - 12} fontSize="9" className="fill-cat-tree font-mono">h{n.height}</text>
               )}
-            </g>
+            </motion.g>
           );
         })}
       </svg>

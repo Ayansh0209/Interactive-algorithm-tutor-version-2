@@ -1,28 +1,39 @@
-import React, { createContext, useContext, useState } from 'react'
+// Theme provider. Drives the `.dark` class on <html> (the strategy index.css
+// keys off), persists the choice, and exposes a toggle. Defaults to dark.
 
-const ThemeContext = createContext()
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+
+const ThemeContext = createContext(null);
 
 export const useTheme = () => {
-  const context = useContext(ThemeContext)
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider')
-  }
-  return context
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error("useTheme must be used within a ThemeProvider");
+  return ctx;
+};
+
+function readInitial() {
+  if (typeof window === "undefined") return "dark";
+  const saved = window.localStorage.getItem("dsaviz-theme");
+  if (saved === "light" || saved === "dark") return saved;
+  return "dark"; // product default
 }
 
-export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true)
+export function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState(readInitial);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    window.localStorage.setItem("dsaviz-theme", theme);
+  }, [theme]);
+
+  const toggle = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
 
   const value = {
-    isDarkMode,
-    setIsDarkMode
-  }
-
-  return (
-    <ThemeContext.Provider value={value}>
-      <div className={`min-h-screen ${isDarkMode ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
-        {children}
-      </div>
-    </ThemeContext.Provider>
-  )
+    theme,
+    isDark: theme === "dark",
+    setTheme,
+    toggle,
+  };
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

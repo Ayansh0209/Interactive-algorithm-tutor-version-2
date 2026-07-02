@@ -29,6 +29,17 @@ export function usePlayback(trace) {
     setCursor((c) => Math.min(c, Math.max(0, visible.length - 1)));
   }, [visible.length]);
 
+  // On a fresh trace, jump to the first step that actually has variables in
+  // scope (step 1 is usually the line BEFORE the first assignment -> blank).
+  useEffect(() => {
+    if (!steps.length) return;
+    const pos = visible.findIndex(
+      (i) => Object.keys(steps[i].locals || {}).length > 0
+    );
+    setCursor(pos > 0 ? pos : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [steps]);
+
   const stepIndex = visible[cursor] ?? 0;
   const current = steps[stepIndex] || null;
 
@@ -40,6 +51,10 @@ export function usePlayback(trace) {
     setCursor(0);
     setPlaying(false);
   }, []);
+  const toEnd = useCallback(() => {
+    setPlaying(false);
+    setCursor(Math.max(0, visible.length - 1));
+  }, [visible.length]);
 
   // Auto-advance loop.
   useEffect(() => {
@@ -75,6 +90,7 @@ export function usePlayback(trace) {
     next,
     prev,
     reset,
+    toEnd,
     semanticOnly,
     setSemanticOnly,
     focusFn,

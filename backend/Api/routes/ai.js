@@ -1,12 +1,13 @@
 /**
- * AI layer.
+ * AI layer (Gemini).
  *
- * Sits ON TOP of deterministic execution. It is fed the real trace and never
- * asked to execute anything. If ANTHROPIC_API_KEY is set, an LLM produces rich
- * prose grounded in that trace; otherwise a rule-based fallback is used so the
- * feature always works.
+ * Sits ON TOP of deterministic execution. Fed the REAL trace; never asked to
+ * execute anything. Two Gemini paths so you can use Google Cloud credits:
+ *   - AI Studio  : set GEMINI_API_KEY            (@google/generative-ai)
+ *   - Vertex AI  : set GCP_PROJECT (+ GCP_LOCATION, ADC) -> uses Vertex credit
+ * If neither is configured, a rule-based fallback keeps the feature working.
  *
- * Modes: "explain" (overview) | "step" | "approaches" | "bug"
+ * Modes: "explain" | "approaches" | "step" | "bug"
  */
 
 const express = require("express");
@@ -14,6 +15,7 @@ const { explain: fallbackExplain } = require("../lib/explainFallback");
 
 const router = express.Router();
 
+const MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 const SYSTEM = [
   "You are a DSA tutor. You are given a JSON execution trace produced by",
   "actually running the student's code (ground truth -- trust it over guesses).",
@@ -21,24 +23,13 @@ const SYSTEM = [
   "cite the trace. When suggesting better approaches, contrast with what they did.",
 ].join(" ");
 
-async function llmExplain({ code, trace, mode, step, question }) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
-  let Anthropic;
-  try {
-    Anthropic = require("@anthropic-ai/sdk");
-  } catch (e) {
-    return null; // SDK not installed; use fallback
-  }
-  const client = new Anthropic({ apiKey: key });
-
+function buildUserMsg({ code, trace, mode, step, question }) {
   const steps = trace.steps || [];
   const window =
     mode === "step" && step != null
       ? steps.slice(Math.max(0, step - 3), step + 3)
       : steps.filter((s) => (s.semantic || []).length).slice(0, 60);
-
-  const userMsg = JSON.stringify({
+  return JSON.stringify({
     mode,
     question: question || null,
     focusStep: step == null ? null : step,
@@ -46,18 +37,49 @@ async function llmExplain({ code, trace, mode, step, question }) {
     meta: trace.meta,
     steps: window,
   });
+}
 
-  const resp = await client.messages.create({
-    model: process.env.AI_MODEL || "claude-sonnet-4-6",
-    max_tokens: 900,
-    system: SYSTEM,
-    messages: [{ role: "user", content: userMsg }],
+// --- AI Studio (simple API key) ---
+async function viaAiStudio(userMsg) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  let GoogleGenerativeAI;
+  try {
+    ({ GoogleGenerativeAI } = require("@google/generative-ai"));
+  } catch (e) {
+    return null;
+  }
+  const genAI = new GoogleGenerativeAI(key);
+  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction: SYSTEM });
+  const result = await model.generateContent(userMsg);
+  return { source: "gemini", text: result.response.text() };
+}
+
+// --- Vertex AI (uses the GCP project / credit) ---
+async function viaVertex(userMsg) {
+  const project = process.env.GCP_PROJECT;
+  if (!project) return null;
+  let VertexAI;
+  try {
+    ({ VertexAI } = require("@google-cloud/vertexai"));
+  } catch (e) {
+    return null;
+  }
+  const vertex = new VertexAI({ project, location: process.env.GCP_LOCATION || "us-central1" });
+  const model = vertex.getGenerativeModel({
+    model: MODEL,
+    systemInstruction: { parts: [{ text: SYSTEM }] },
   });
-  const text = (resp.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-  return { source: "llm", text };
+  const r = await model.generateContent(userMsg);
+  const text = (r.response.candidates?.[0]?.content?.parts || [])
+    .map((p) => p.text)
+    .join("");
+  return { source: "gemini-vertex", text };
+}
+
+async function llmExplain(args) {
+  const userMsg = buildUserMsg(args);
+  return (await viaAiStudio(userMsg)) || (await viaVertex(userMsg)) || null;
 }
 
 router.post("/explain", async (req, res) => {
@@ -66,9 +88,9 @@ router.post("/explain", async (req, res) => {
 
   try {
     const llm = await llmExplain({ code, trace, mode, step, question });
-    if (llm) return res.json(llm);
+    if (llm && llm.text) return res.json(llm);
   } catch (err) {
-    console.error("LLM explain failed, using fallback:", err.message);
+    console.error("Gemini explain failed, using fallback:", err.message);
   }
   return res.json(fallbackExplain({ trace, mode, step }));
 });

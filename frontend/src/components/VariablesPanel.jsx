@@ -3,8 +3,10 @@
 // program that uses (say) a stack as a helper next to the main array shows BOTH
 // at once -- that is the "multi-structure" view, no special-casing required.
 
+import { motion, AnimatePresence } from "framer-motion";
+import { T } from "../lib/motion";
 import { pickRenderer, TYPE_META } from "./visualizers/registry";
-import { Badge } from "./ui";
+import { Badge, EmptyState, Icon, cx } from "./ui";
 
 function indicesFromSemantic(step, name) {
   const out = [];
@@ -24,7 +26,7 @@ function sortVars(entries, types) {
 
 export default function VariablesPanel({ step }) {
   if (!step) {
-    return <div className="p-6 text-white/30 text-sm italic">Run code to see variables.</div>;
+    return <EmptyState icon={<Icon name="target" size={22} />} title="No step selected" hint="Run code to see variables." />;
   }
   const locals = step.locals || {};
   const types = step.var_types || {};
@@ -32,38 +34,46 @@ export default function VariablesPanel({ step }) {
   const entries = sortVars(Object.entries(locals), types);
 
   if (!entries.length) {
-    return <div className="p-6 text-white/30 text-sm italic">No variables in scope yet.</div>;
+    return <EmptyState icon={<Icon name="layers" size={22} />} title="No variables in scope yet" hint="Step forward — they appear as your code assigns them." />;
   }
 
   return (
     <div className="p-3 space-y-3">
-      {entries.map(([name, value]) => {
-        const vtype = types[name] || "primitive";
-        const Renderer = pickRenderer(vtype);
-        const [label, color] = TYPE_META[vtype] || [vtype, "slate"];
-        return (
-          <div
-            key={name}
-            className={`rounded-xl border bg-white/[0.02] overflow-hidden transition ${
-              changed.has(name) ? "border-amber-400/40" : "border-white/10"
-            }`}
-          >
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5">
-              <span className="font-mono text-sm text-white/90">{name}</span>
-              <Badge color={color}>{label}</Badge>
-              {changed.has(name) && <span className="text-[10px] text-amber-300">updated</span>}
-            </div>
-            <Renderer
-              name={name}
-              value={value}
-              vtype={vtype}
-              step={step}
-              changed={changed.has(name)}
-              highlightIndices={indicesFromSemantic(step, name)}
-            />
-          </div>
-        );
-      })}
+      <AnimatePresence initial={false}>
+        {entries.map(([name, value]) => {
+          const vtype = types[name] || "primitive";
+          const Renderer = pickRenderer(vtype);
+          const [label, color] = TYPE_META[vtype] || [vtype, "slate"];
+          return (
+            <motion.div
+              key={name}
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={T.base}
+              className={cx(
+                "rounded-xl border bg-surface-2 overflow-hidden transition-colors duration-300",
+                changed.has(name) ? "border-warning/50 shadow-soft" : "border-border"
+              )}
+            >
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border">
+                <span className="font-mono text-sm text-fg">{name}</span>
+                <Badge color={color}>{label}</Badge>
+                {changed.has(name) && <span className="text-3xs text-warning ml-auto">updated</span>}
+              </div>
+              <Renderer
+                name={name}
+                value={value}
+                vtype={vtype}
+                step={step}
+                changed={changed.has(name)}
+                highlightIndices={indicesFromSemantic(step, name)}
+              />
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }

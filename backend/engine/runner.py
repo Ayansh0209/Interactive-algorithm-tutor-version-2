@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import promote as promote_mod
 from . import scope as scope_mod
 from . import semantic as sem
 from . import serialize as ser
@@ -145,7 +146,8 @@ class Tracer:
 
     def _serialize_locals(self, frame):
         clean = {k: v for k, v in frame.f_locals.items()
-                 if not k.startswith("__") and not callable(v)}
+                 if not k.startswith("__") and not k.startswith(".")
+                 and k != "fromlist" and not callable(v)}
         scenes, types = {}, {}
         for name, val in clean.items():
             vtype = detect_type(val, name)
@@ -284,6 +286,7 @@ def run_code(code: str, max_steps: int = DEFAULT_MAX_STEPS,
         sys.stdin = old_stdin
 
     meta["output"] = buffer.getvalue()
+    promote_mod.promote(tracer.steps)  # access-pattern relabel (name-independent)
     meta["truncated"] = tracer.truncated
     meta["num_steps"] = len(tracer.steps)
     return Trace(meta=meta, steps=tracer.steps).as_dict()
