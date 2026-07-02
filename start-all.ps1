@@ -18,6 +18,12 @@ if (-not $hasJava) {
   Write-Host "  Install with:  winget install EclipseAdoptium.Temurin.17.JDK" -ForegroundColor Yellow
 }
 
+$hasCpp = (Have g++) -and (Have gdb)
+if (-not $hasCpp) {
+  Write-Host "g++ + gdb not detected -> C++ tab disabled (Python still works)." -ForegroundColor Yellow
+  Write-Host "  Install with:  winget install MSYS2.MSYS2   then  pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gdb" -ForegroundColor Yellow
+}
+
 # first-run installs
 if (-not (Test-Path "$root\backend\Api\node_modules")) {
   Write-Host "Installing gateway deps..."; Push-Location "$root\backend\Api"; npm install; Pop-Location
@@ -31,6 +37,9 @@ Write-Host "Ensuring Python deps..."; pip install -r "$root\backend\requirements
 Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend'; python -m uvicorn worker.app:app --port 8000"
 if ($hasJava) {
   Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend\java-worker'; java JavaWorker.java --serve 8001"
+}
+if ($hasCpp) {
+  Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend\cpp-worker'; python -m uvicorn app:app --port 8002"
 }
 Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\backend\Api'; npm start"
 Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$root\frontend'; npm run dev"

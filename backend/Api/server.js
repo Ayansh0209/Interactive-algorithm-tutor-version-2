@@ -17,6 +17,7 @@ const cors = require("cors");
 const pythonRoutes = require("./routes/python");
 const aiRoutes = require("./routes/ai");
 const javaRoutes = require("./routes/java");
+const cppRoutes = require("./routes/cpp");
 
 const app = express();
 app.use(cors());
@@ -26,11 +27,8 @@ app.get("/health", (_req, res) => res.json({ ok: true, service: "gateway" }));
 
 app.use("/api/python", pythonRoutes);
 app.use("/api/java", javaRoutes);
+app.use("/api/cpp", cppRoutes);
 app.use("/api/ai", aiRoutes);
-
-// Future:
-// app.use("/api/cpp", require("./routes/cpp"));
-// app.use("/api/java", require("./routes/java"));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
