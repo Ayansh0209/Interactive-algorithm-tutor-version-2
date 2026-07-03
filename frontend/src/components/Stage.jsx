@@ -5,6 +5,8 @@ import { useState } from "react";
 import VariablesPanel from "./VariablesPanel";
 import RecursionTreeView from "./visualizers/RecursionTreeView";
 import LoopBox from "./LoopBox";
+import AutoFit from "./AutoFit";
+import ErrorBoundary from "./ErrorBoundary";
 
 export default function Stage({ trace, current, stepIndex }) {
   const [tab, setTab] = useState("structures");
@@ -28,11 +30,17 @@ export default function Stage({ trace, current, stepIndex }) {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto scrollbar-thin">
+      <div className="flex-1 min-h-0">
         {tab === "structures" ? (
-          <VariablesPanel step={current} />
+          <AutoFit min={0.45} max={1.2} mode="both" align="top">
+            <VariablesPanel step={current} />
+          </AutoFit>
         ) : (
-          <RecursionTreeView steps={steps} stepIndex={stepIndex} />
+          <AutoFit min={0.4} max={1} mode="both" align="center">
+            <ErrorBoundary label="recursion tree" resetKey={stepIndex}>
+              <RecursionTreeView steps={steps} stepIndex={stepIndex} />
+            </ErrorBoundary>
+          </AutoFit>
         )}
       </div>
     </div>

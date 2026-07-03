@@ -74,8 +74,8 @@ def build_scene(val: Any, vtype: str, name: str = "") -> Any:
             return {"type": "set", "values": ser.json_safe(list(val))}
         if vtype == "array":
             return ser.json_safe(list(val))
-        if vtype == "constructing":
-            return "<" + type(val).__name__ + " constructing...>"
+        if vtype in ("object", "constructing"):
+            return ser.serialize_object(val)
         return ser.json_safe(val)
     except Exception as exc:  # never let one bad value kill the trace
         return {"type": vtype, "error": str(exc)[:120]}
@@ -216,6 +216,13 @@ class Tracer:
         if st == "conditional":
             step["branch_taken"] = scope_mod.branch_taken(
                 code_line, frame.f_locals, frame.f_globals)
+        # Capture the returned value (settrace passes it as `arg` on return) so
+        # the recursion tree can show values bubbling up to the parent call.
+        if event == "return":
+            try:
+                step["return_value"] = ser.json_safe(arg)
+            except Exception:
+                pass
 
         self.steps.append(step)
         self.prev_locals_by_call[call_id] = scenes

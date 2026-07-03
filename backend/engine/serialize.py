@@ -66,6 +66,44 @@ def _first_attr(node: Any, names: tuple[str, ...]) -> Any:
     return None
 
 
+VAL_ATTRS_EARLY = ("val", "value", "key", "data", "item")
+
+
+def _compact_obj(v: Any) -> Any:
+    """A short tag for a nested object field: ``<Node 4>`` (class + its value)
+    or ``<Node>``, so an object's attributes read cleanly instead of dumping
+    ``<Node object>`` for every pointer field."""
+    if v is None or isinstance(v, (int, float, str, bool)):
+        return v
+    if isinstance(v, (list, tuple, set, frozenset, dict)):
+        return json_safe(v)
+    if hasattr(v, "__dict__"):
+        name = type(v).__name__
+        inner = _first_attr(v, VAL_ATTRS_EARLY)
+        if isinstance(inner, (int, float, str, bool)):
+            return f"<{name} {inner}>"
+        return f"<{name}>"
+    return str(v)
+
+
+def serialize_object(obj: Any) -> Any:
+    """A class instance -> ``{type:'object', cls, fields}`` so the UI can show
+    its attributes (e.g. a Node's ``val`` / ``next``) instead of an opaque
+    ``<Foo object>``. Nested objects are shown as compact tags."""
+    if obj is None or isinstance(obj, (int, float, str, bool)):
+        return obj
+    cls = type(obj).__name__
+    fields: dict[str, Any] = {}
+    try:
+        for k, v in vars(obj).items():
+            if k.startswith("__") or callable(v):
+                continue
+            fields[str(k)] = _compact_obj(v)
+    except Exception:
+        pass
+    return {"type": "object", "cls": cls, "fields": fields}
+
+
 VAL_ATTRS = ("val", "value", "key", "data", "item")
 LEFT_ATTRS = ("left", "left_child", "lc", "l")
 RIGHT_ATTRS = ("right", "right_child", "rc", "r")

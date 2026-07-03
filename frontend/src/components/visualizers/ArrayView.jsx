@@ -35,7 +35,7 @@ export default function ArrayView({ name, value, step, highlightIndices = [] }) 
   }
 
   return (
-    <div className="px-4 py-3 overflow-auto scrollbar-thin">
+    <div className="px-4 py-3 overflow-x-auto scrollbar-thin">
       <div className="flex items-start gap-1.5 flex-wrap">
         {cells.map((c, i) => (
           <div key={i} className="flex flex-col items-center gap-1">

@@ -109,7 +109,7 @@ export default function VisualizerPage({ onHome, onDocs }) {
             bodyClassName="flex flex-col"
           >
             <div className="flex-1 min-h-0 overflow-auto scrollbar-thin">
-              <CodePane code={code} onChange={setCode} currentLine={pb.current ? pb.current.line : null} editable={!trace} />
+              <CodePane code={code} onChange={setCode} currentLine={pb.current ? pb.current.line : null} nextLine={pb.nextStep ? pb.nextStep.line : null} editable={!trace} />
             </div>
             <div className="shrink-0 border-t border-border">
               <button

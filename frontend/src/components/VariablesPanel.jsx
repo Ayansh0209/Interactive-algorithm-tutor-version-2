@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { T } from "../lib/motion";
 import { pickRenderer, TYPE_META } from "./visualizers/registry";
 import { Badge, EmptyState, Icon, cx } from "./ui";
+import ErrorBoundary from "./ErrorBoundary";
 
 function indicesFromSemantic(step, name) {
   const out = [];
@@ -37,8 +38,16 @@ export default function VariablesPanel({ step }) {
     return <EmptyState icon={<Icon name="layers" size={22} />} title="No variables in scope yet" hint="Step forward — they appear as your code assigns them." />;
   }
 
+  // Lay variables out in fixed-width columns (1 when few, up to 3 when many) so
+  // they use the panel's WIDTH instead of stacking into a scrollbar. AutoFit
+  // (wrapping this) then scales the whole grid to fit the box exactly.
+  const cols = entries.length <= 2 ? 1 : entries.length <= 6 ? 2 : 3;
+
   return (
-    <div className="p-3 space-y-3">
+    <div
+      className="p-3"
+      style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 17rem)`, gap: "0.7rem", alignItems: "start" }}
+    >
       <AnimatePresence initial={false}>
         {entries.map(([name, value]) => {
           const vtype = types[name] || "primitive";
@@ -62,14 +71,16 @@ export default function VariablesPanel({ step }) {
                 <Badge color={color}>{label}</Badge>
                 {changed.has(name) && <span className="text-3xs text-warning ml-auto">updated</span>}
               </div>
-              <Renderer
-                name={name}
-                value={value}
-                vtype={vtype}
-                step={step}
-                changed={changed.has(name)}
-                highlightIndices={indicesFromSemantic(step, name)}
-              />
+              <ErrorBoundary label={name} resetKey={step?.i}>
+                <Renderer
+                  name={name}
+                  value={value}
+                  vtype={vtype}
+                  step={step}
+                  changed={changed.has(name)}
+                  highlightIndices={indicesFromSemantic(step, name)}
+                />
+              </ErrorBoundary>
             </motion.div>
           );
         })}

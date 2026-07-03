@@ -42,6 +42,10 @@ export function usePlayback(trace) {
 
   const stepIndex = visible[cursor] ?? 0;
   const current = steps[stepIndex] || null;
+  // The step that will run next (in the filtered view) -- powers the "line about
+  // to run" highlight in the code pane.
+  const nextIndex = visible[cursor + 1];
+  const nextStep = nextIndex != null ? steps[nextIndex] || null : null;
 
   const next = useCallback(() => {
     setCursor((c) => (c < visible.length - 1 ? c + 1 : c));
@@ -79,6 +83,7 @@ export function usePlayback(trace) {
   return {
     steps,
     current,
+    nextStep,
     stepIndex,
     cursor,
     setCursor,

@@ -11,6 +11,7 @@ import TreeView from "./TreeView";
 import StackQueueView from "./StackQueueView";
 import GraphView from "./GraphView";
 import PrimitiveView from "./PrimitiveView";
+import ObjectView from "./ObjectView";
 
 export const RENDERERS = {
   array: ArrayView,
@@ -33,8 +34,8 @@ export const RENDERERS = {
   graph_adjacency_list: GraphView,
   graph_weighted: GraphView,
   primitive: PrimitiveView,
-  object: PrimitiveView,
-  constructing: PrimitiveView,
+  object: ObjectView,
+  constructing: ObjectView,
   unknown: PrimitiveView,
 };
 

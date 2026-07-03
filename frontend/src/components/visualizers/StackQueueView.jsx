@@ -8,7 +8,13 @@ import { T } from "../../lib/motion";
 import { cx } from "../ui";
 
 function itemsFrom(value) {
-  return value?.values || (Array.isArray(value) ? value : []);
+  // NOTE: check Array.isArray FIRST. A promoted stack/queue often has a plain
+  // array scene, and `[1,2].values` is Array.prototype.values (a function, and
+  // truthy) -- reading `value?.values` first would return that function and
+  // blow up on `.map`.
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.values)) return value.values;
+  return [];
 }
 
 export default function StackQueueView({ value, vtype }) {
