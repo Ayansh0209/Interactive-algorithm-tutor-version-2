@@ -159,6 +159,12 @@ class Tracer:
     def __call__(self, frame, event, arg):
         if event not in ("call", "line", "return"):
             return self
+        # Only ever trace the user's OWN code. Never descend into library or
+        # import machinery: an ``import X`` of an uncached module would otherwise
+        # dump importlib's internals (data / magic / code / loader / bytecode_path
+        # ...) as if they were the user's variables. Library calls stay opaque.
+        if frame.f_code.co_filename != "<user-code>":
+            return None
         # Hard limits: stop EXECUTION (not just recording) so infinite loops and
         # runaway recursion cannot hang the worker.
         if len(self.steps) >= self.max_steps:

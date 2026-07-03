@@ -87,11 +87,18 @@ def _compact_obj(v: Any) -> Any:
 
 
 def serialize_object(obj: Any) -> Any:
-    """A class instance -> ``{type:'object', cls, fields}`` so the UI can show
-    its attributes (e.g. a Node's ``val`` / ``next``) instead of an opaque
-    ``<Foo object>``. Nested objects are shown as compact tags."""
+    """A class instance / mapping -> ``{type:'object', cls, fields}`` so the UI
+    can show its attributes (e.g. a Node's ``val`` / ``next``) or a dict's
+    key->value pairs, instead of an opaque ``<Foo object>`` / empty box. Nested
+    objects are shown as compact tags."""
     if obj is None or isinstance(obj, (int, float, str, bool)):
         return obj
+    # A plain dict used as a map/lookup: show its items as fields.
+    if isinstance(obj, dict):
+        fields = {}
+        for k, v in list(obj.items())[:MAX_NODES]:
+            fields[str(k)] = _compact_obj(v)
+        return {"type": "object", "cls": "dict", "fields": fields}
     cls = type(obj).__name__
     fields: dict[str, Any] = {}
     try:
