@@ -23,7 +23,7 @@ export default function DocsPage({ onHome, onOpenVisualizer, initialSlug }) {
   function select(s) {
     setSlug(s);
     window.location.hash = "#/docs/" + s;
-    document.title = topicBySlug(s).title + " · DSAviz Docs";
+    document.title = topicBySlug(s).title + " · IAT Docs";
     setNavOpen(false);
   }
 

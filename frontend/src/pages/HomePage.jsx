@@ -13,7 +13,7 @@ import Wordmark from "../components/Wordmark";
 import ThemeToggle from "../components/ThemeToggle";
 
 const STEPS = [
-  { icon: "code", title: "Paste code, pick a language", body: "Drop in any Python or Java solution — or start from a ready-made example. Flip the language toggle any time." },
+  { icon: "code", title: "Paste code, pick a language", body: "Drop in any Python, Java or C++ solution — or start from a ready-made example. Flip the language toggle any time." },
   { icon: "cpu", title: "It runs for real", body: "The engine executes your code and traces every step with sys.settrace / JDI. No LLM guessing, no pre-baked animation." },
   { icon: "play", title: "Watch it & ask why", body: "The right visualization is detected automatically and animated. Scrub the timeline and ask the AI tutor about any step." },
 ];
@@ -37,7 +37,7 @@ const STRUCTURES = [
   { id: "dp", icon: "table", label: "Dynamic Programming", fg: "text-cat-dp", soft: "bg-cat-dp/10", blurb: "Memoization & tabulation grids" },
 ];
 
-const TRUST = ["Runs your real code", "Python & Java", "No sign-up", "Free to use"];
+const TRUST = ["Runs your real code", "Python, Java & C++", "No sign-up", "Free to use"];
 
 export default function HomePage({ onStart, onDocs }) {
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -75,14 +75,14 @@ export default function HomePage({ onStart, onDocs }) {
           {/* Left: copy */}
           <div className="text-center lg:text-left">
             <motion.div {...slideUp} transition={T.base} className="inline-flex">
-              <Badge color="success"><span className="h-1.5 w-1.5 rounded-full bg-success" /> Live execution · Python &amp; Java</Badge>
+              <Badge color="success"><span className="h-1.5 w-1.5 rounded-full bg-success" /> Live execution · Python, Java &amp; C++</Badge>
             </motion.div>
             <motion.h1 {...slideUp} transition={{ ...T.base, delay: 0.05 }} className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mt-5 leading-[1.05]">
               Paste your code.<br />
               <span className="bg-gradient-to-r from-brand via-cat-tree to-cat-hash bg-clip-text text-transparent">Watch it actually run.</span>
             </motion.h1>
             <motion.p {...slideUp} transition={{ ...T.base, delay: 0.1 }} className="mt-5 text-fg-muted max-w-xl mx-auto lg:mx-0 text-lg leading-relaxed">
-              DSAviz executes your real solution and traces it step by step. Arrays, linked lists, trees,
+              IAT executes your real solution and traces it step by step. Arrays, linked lists, trees,
               recursion, DP grids and graphs are detected automatically and drawn the right way — with an
               AI tutor that watched the whole run.
             </motion.p>
@@ -189,7 +189,7 @@ export default function HomePage({ onStart, onDocs }) {
         <section className="grid lg:grid-cols-2 gap-8 items-center">
           <div>
             <p className="text-fg-muted leading-relaxed">
-              Because DSAviz has the real execution trace, the tutor answers from what your code actually did —
+              Because IAT has the real execution trace, the tutor answers from what your code actually did —
               which line ran, how a variable changed, why a branch was taken — not a generic explanation of the
               algorithm. Ask it to compare approaches, explain a step, or suggest what to visualize next.
             </p>

@@ -62,7 +62,7 @@ export default function VisualizerPage({ onHome, onDocs }) {
     <div className="h-screen flex flex-col bg-bg text-fg">
       {/* Top bar */}
       <header className="flex items-center gap-2.5 px-4 h-14 border-b border-border shrink-0">
-        <Wordmark className="text-lg" onClick={onHome} />
+        <Wordmark className="text-lg" onClick={onHome} forceShort />
         <span className="hidden sm:block h-5 w-px bg-border mx-0.5" />
         <Segmented size="sm" value={language} onChange={switchLanguage} options={[{ value: "python", label: "Python" }, { value: "java", label: "Java" }, { value: "cpp", label: "C++" }]} />
         <Select

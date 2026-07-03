@@ -1,5 +1,5 @@
 /* ===========================================================================
-   DSAviz design system  --  single source of truth for the visual language.
+   Interactive Algorithm Tutor design system  --  single source of truth for the visual language.
 
    Tailwind v4 is configured here (no tailwind.config.js). The structure is:
      1. Raw, theme-aware CSS variables in :root (light) and .dark (dark).

@@ -1,9 +1,9 @@
-# DSAviz one-click launcher (PowerShell).
+# Interactive Algorithm Tutor one-click launcher (PowerShell).
 # Right-click > Run with PowerShell, or: powershell -ExecutionPolicy Bypass -File start-all.ps1
 $root = $PSScriptRoot
 function Have($c) { $null -ne (Get-Command $c -ErrorAction SilentlyContinue) }
 
-Write-Host "=== DSAviz launcher ===" -ForegroundColor Cyan
+Write-Host "=== Interactive Algorithm Tutor launcher ===" -ForegroundColor Cyan
 
 if (-not (Have python)) { Write-Host "Python not found. Install Python 3.10+ and re-run." -ForegroundColor Red; Read-Host "Enter to exit"; exit }
 if (-not (Have node))   { Write-Host "Node.js not found. Install Node 18+ and re-run." -ForegroundColor Red; Read-Host "Enter to exit"; exit }
