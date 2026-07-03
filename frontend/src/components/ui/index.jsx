@@ -286,6 +286,10 @@ const ICONS = {
   cpu: <><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9.5" y="9.5" width="5" height="5" rx="1" /><path d="M9 3v2m6-2v2M9 19v2m6-2v2M3 9h2m-2 6h2m14-6h2m-2 6h2" /></>,
   terminal: <path d="M4 5.5h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1zM7 9.5l3 2.5-3 2.5M12.5 15h4.5" />,
   message: <path d="M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z" />,
+  bulb: <><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.8 10.6c.5.5.8 1 .8 1.9h6c0-.9.3-1.4.8-1.9A6 6 0 0 0 12 3z" /></>,
+  alert: <><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></>,
+  compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></>,
+  quote: <path d="M7 7H4v6h5V7l-2 4M20 7h-3v6h5V7l-2 4" />,
 };
 
 export function Icon({ name, size = 18, className = "", strokeWidth = 1.75 }) {
