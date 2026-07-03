@@ -53,6 +53,17 @@ MAX_STEPS = int(os.environ.get("CPP_MAX_STEPS", "4000"))
 MAX_SECONDS = float(os.environ.get("CPP_MAX_SECONDS", "8"))
 MAX_ELEMS = 200          # cap array/vector length we serialize
 MAX_DEPTH = 4            # nesting cap for value serialization
+TREE_MAX_DEPTH = 40      # separate, deeper cap for walking linked lists / trees
+
+# Field-name heuristics for pointer-based node structs (Node* / TreeNode*), the
+# idiomatic C++ shape for linked lists and trees. Mirrors the same field names
+# the Python and Java engines already use, so all three languages agree on what
+# "looks like a linked list" or "looks like a tree" means.
+NEXT_NAMES = ("next", "nxt", "next_node")
+PREV_NAMES = ("prev", "previous", "prev_node")
+LEFT_NAMES = ("left", "l", "lc")
+RIGHT_NAMES = ("right", "r", "rc")
+VAL_NAMES = ("val", "value", "data", "key", "item")
 
 # Read the source once so we can attach the exact line text to each step.
 try:
@@ -236,6 +247,116 @@ def read_container(v, tn):
     return "array", vals
 
 
+def _struct_field_names(t):
+    try:
+        return {f.name for f in t.fields() if f.name}
+    except Exception:
+        return set()
+
+
+def _pointee_struct_type(v):
+    """If v is a non-null pointer to a struct/class, return the pointee type."""
+    try:
+        t = v.type.strip_typedefs()
+        if t.code != gdb.TYPE_CODE_PTR or int(v) == 0:
+            return None
+        pt = t.target().strip_typedefs()
+        return pt if pt.code == gdb.TYPE_CODE_STRUCT else None
+    except Exception:
+        return None
+
+
+def _field_value(struct_val, names):
+    for n in names:
+        try:
+            return struct_val[n]
+        except Exception:
+            continue
+    return None
+
+
+def _looks_like_list_node(t):
+    return bool(_struct_field_names(t) & set(NEXT_NAMES))
+
+
+def _looks_like_tree_node(t):
+    fields = _struct_field_names(t)
+    return bool(fields & set(LEFT_NAMES)) and bool(fields & set(RIGHT_NAMES))
+
+
+def walk_linked_list(ptr):
+    """Follow a Node* chain into the same {type, nodes, head} shape the
+    Python/Java linked-list renderers already expect."""
+    nodes, index_by_addr = [], {}
+    is_doubly = is_circular = False
+    cur = ptr
+    while cur is not None and len(nodes) < MAX_ELEMS:
+        try:
+            if int(cur) == 0:
+                break
+        except Exception:
+            break
+        addr = int(cur)
+        if addr in index_by_addr:
+            is_circular = True
+            break
+        try:
+            node_val = cur.dereference()
+        except Exception:
+            break
+        index_by_addr[addr] = len(nodes)
+        val_field = _field_value(node_val, VAL_NAMES)
+        prev_field = _field_value(node_val, PREV_NAMES)
+        if prev_field is not None:
+            try:
+                if int(prev_field) != 0:
+                    is_doubly = True
+            except Exception:
+                pass
+        nodes.append({"id": len(nodes), "value": serialize_value(val_field) if val_field is not None else None,
+                      "next": None, "prev": None})
+        cur = _field_value(node_val, NEXT_NAMES)
+    for i, node in enumerate(nodes):
+        if i + 1 < len(nodes):
+            node["next"] = i + 1
+    if is_circular and nodes:
+        nodes[-1]["next"] = index_by_addr.get(int(ptr), 0)
+    if is_doubly:
+        for i in range(1, len(nodes)):
+            nodes[i]["prev"] = i - 1
+    return {
+        "type": "doubly_linked_list" if is_doubly else "linked_list",
+        "circular": is_circular,
+        "nodes": nodes,
+        "head": 0 if nodes else None,
+    }
+
+
+def walk_tree(ptr, visited=None, depth=0):
+    """Recursively dereference left/right pointers into {val, left, right}."""
+    if visited is None:
+        visited = set()
+    try:
+        if ptr is None or int(ptr) == 0:
+            return None
+    except Exception:
+        return None
+    addr = int(ptr)
+    if depth > TREE_MAX_DEPTH or addr in visited or len(visited) > MAX_ELEMS:
+        return {"val": "<truncated>"}
+    visited.add(addr)
+    try:
+        node_val = ptr.dereference()
+    except Exception:
+        return None
+    val_field = _field_value(node_val, VAL_NAMES)
+    return {
+        "val": serialize_value(val_field) if val_field is not None else None,
+        "left": walk_tree(_field_value(node_val, LEFT_NAMES), visited, depth + 1),
+        "right": walk_tree(_field_value(node_val, RIGHT_NAMES), visited, depth + 1),
+    }
+
+
 def classify_and_scene(v):
     """Map a gdb.Value to (var_type tag, scene JSON) as the renderers expect."""
     try:
@@ -244,6 +365,28 @@ def classify_and_scene(v):
         return "primitive", str(v)
     code = t.code
     tn = str(t)
+
+    # Pointer to a struct/class that looks like a linked-list node or a tree
+    # node (by field name, same heuristic Python/Java use) -> walk it into the
+    # renderer-ready shape instead of showing a raw address.
+    if code == gdb.TYPE_CODE_PTR:
+        pt = _pointee_struct_type(v)
+        if pt is not None:
+            if _looks_like_tree_node(pt):
+                kind = "avl_tree" if "height" in _struct_field_names(pt) or "bf" in _struct_field_names(pt) else "binary_tree"
+                return kind, {"type": kind, "root": walk_tree(v)}
+            if _looks_like_list_node(pt):
+                scene = walk_linked_list(v)
+                return scene["type"], scene   # doubly_linked_list vs linked_list
+            # Some other struct pointer (e.g. a TrieNode*) -- dereference once
+            # and show its fields instead of a bare address. Best-effort: a
+            # container FIELD nested inside (e.g. unordered_map<char,TrieNode*>
+            # children) still shows raw internals, since only top-level
+            # variables get the pretty-printer treatment (read_container).
+            try:
+                return "object", serialize_value(v.dereference())
+            except Exception:
+                pass
 
     # Associative + adaptor containers via the pretty-printer visualizer.
     flat = tn.replace(" ", "")
