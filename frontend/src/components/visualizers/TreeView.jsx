@@ -5,6 +5,7 @@
 
 import { motion } from "framer-motion";
 import { cx } from "../ui";
+import { FitWidth } from "../AutoFit";
 
 function collect(root, kind) {
   const nodes = [];
@@ -56,7 +57,8 @@ export default function TreeView({ value }) {
   const py = (n) => n.depth * GAP_Y + 26;
 
   return (
-    <div className="px-4 py-3 overflow-auto scrollbar-thin">
+    <div className="px-4 py-3">
+      <FitWidth min={0.35}>
       <svg width={W} height={H} className="overflow-visible">
         {edges.map(([a, b], i) => (
           <line key={i} x1={px(nodes[a])} y1={py(nodes[a])} x2={px(nodes[b])} y2={py(nodes[b])} className="stroke-border-strong" strokeWidth="1.5" />
@@ -80,6 +82,7 @@ export default function TreeView({ value }) {
           );
         })}
       </svg>
+      </FitWidth>
     </div>
   );
 }

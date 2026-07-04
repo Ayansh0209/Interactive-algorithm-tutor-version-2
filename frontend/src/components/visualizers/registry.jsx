@@ -12,6 +12,7 @@ import StackQueueView from "./StackQueueView";
 import GraphView from "./GraphView";
 import PrimitiveView from "./PrimitiveView";
 import ObjectView from "./ObjectView";
+import TrieView from "./TrieView";
 
 export const RENDERERS = {
   array: ArrayView,
@@ -27,6 +28,7 @@ export const RENDERERS = {
   red_black_tree: TreeView,
   segment_tree: TreeView,
   nary_tree: TreeView,
+  trie: TrieView,
   stack: StackQueueView,
   queue: StackQueueView,
   deque: StackQueueView,
@@ -56,6 +58,7 @@ export const TYPE_META = {
   red_black_tree: ["red-black tree", "rose"],
   segment_tree: ["segment tree", "amber"],
   nary_tree: ["n-ary tree", "indigo"],
+  trie: ["trie", "green"],
   stack: ["stack", "amber"],
   queue: ["queue", "amber"],
   deque: ["deque", "amber"],

@@ -5,6 +5,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { T } from "../../lib/motion";
 import { Icon, cx } from "../ui";
+import { FitWidth } from "../AutoFit";
 
 export default function LinkedListView({ value }) {
   const nodes = value?.nodes || [];
@@ -14,7 +15,8 @@ export default function LinkedListView({ value }) {
   if (!nodes.length) return <div className="px-4 py-4 text-fg-faint italic text-sm">empty / null</div>;
 
   return (
-    <div className="px-4 py-4 overflow-auto scrollbar-thin">
+    <div className="px-4 py-4">
+      <FitWidth min={0.35}>
       <div className="flex items-start gap-0 min-w-max">
         <AnimatePresence initial={false}>
           {nodes.map((node, i) => (
@@ -62,6 +64,7 @@ export default function LinkedListView({ value }) {
           <span className={cx("ml-2 mt-[1.35rem] px-2 py-0.5 rounded-md text-2xs border border-warning/30 bg-warning-soft text-warning")}>circular</span>
         )}
       </div>
+      </FitWidth>
     </div>
   );
 }

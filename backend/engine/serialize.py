@@ -33,7 +33,9 @@ def deep_json_safe(obj: Any, _depth: int = 0) -> Any:
     if type(obj).__name__ == "deque":
         return [deep_json_safe(v, _depth + 1) for v in obj]
     if hasattr(obj, "__dict__"):
-        return f"<{type(obj).__name__} object>"
+        # Compact tag with the node's value ("<ListNode 4>"), not an opaque
+        # "<ListNode object>" -- heaps of (key, node) tuples stay readable.
+        return _compact_obj(obj)
     return str(obj)
 
 
@@ -72,11 +74,20 @@ VAL_ATTRS_EARLY = ("val", "value", "key", "data", "item")
 def _compact_obj(v: Any) -> Any:
     """A short tag for a nested object field: ``<Node 4>`` (class + its value)
     or ``<Node>``, so an object's attributes read cleanly instead of dumping
-    ``<Node object>`` for every pointer field."""
+    ``<Node object>`` for every pointer field. Containers summarize shallowly
+    (never recurse -- deep_json_safe may call us from inside a cycle)."""
     if v is None or isinstance(v, (int, float, str, bool)):
         return v
-    if isinstance(v, (list, tuple, set, frozenset, dict)):
-        return json_safe(v)
+    if isinstance(v, (list, tuple)):
+        if len(v) <= 6 and all(isinstance(x, (int, float, str, bool, type(None))) for x in v):
+            return list(v)
+        return f"[{len(v)} items]"
+    if isinstance(v, (set, frozenset)):
+        return f"{{{len(v)} items}}"
+    if isinstance(v, dict):
+        if len(v) <= 6 and all(isinstance(x, (int, float, str, bool, type(None))) for x in v.values()):
+            return {str(k): x for k, x in v.items()}
+        return f"{{{len(v)} entries}}"
     if hasattr(v, "__dict__"):
         name = type(v).__name__
         inner = _first_attr(v, VAL_ATTRS_EARLY)

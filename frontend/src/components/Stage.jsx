@@ -6,6 +6,7 @@ import VariablesPanel from "./VariablesPanel";
 import RecursionTreeView from "./visualizers/RecursionTreeView";
 import LoopBox from "./LoopBox";
 import AutoFit from "./AutoFit";
+import ZoomPan from "./ZoomPan";
 import ErrorBoundary from "./ErrorBoundary";
 
 export default function Stage({ trace, current, stepIndex }) {
@@ -36,11 +37,11 @@ export default function Stage({ trace, current, stepIndex }) {
             <VariablesPanel step={current} />
           </AutoFit>
         ) : (
-          <AutoFit min={0.4} max={1} mode="both" align="center">
+          <ZoomPan>
             <ErrorBoundary label="recursion tree" resetKey={stepIndex}>
               <RecursionTreeView steps={steps} stepIndex={stepIndex} />
             </ErrorBoundary>
-          </AutoFit>
+          </ZoomPan>
         )}
       </div>
     </div>

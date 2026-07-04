@@ -7,6 +7,44 @@
 import { useRef, useState, useLayoutEffect, useCallback } from "react";
 import { cx } from "./ui";
 
+// FitWidth: scales its content DOWN (never up) so its natural width fits the
+// container's width — no inner horizontal scrollbar. The wrapper's height
+// tracks the scaled content so surrounding layout stays tight. Used by the
+// wide structure renderers (trees, linked lists, tries) inside variable cards.
+export function FitWidth({ children, min = 0.35, className = "" }) {
+  const outer = useRef(null);
+  const inner = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [h, setH] = useState(null);
+
+  const measure = useCallback(() => {
+    const o = outer.current, i = inner.current;
+    if (!o || !i) return;
+    const ow = o.clientWidth, iw = i.scrollWidth, ih = i.scrollHeight;
+    if (!ow || !iw || !ih) return;
+    const s = Math.max(min, Math.min(1, ow / iw));
+    setScale((p) => (Math.abs(p - s) > 0.004 ? s : p));
+    setH(Math.ceil(ih * s));
+  }, [min]);
+
+  useLayoutEffect(() => {
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    if (outer.current) ro.observe(outer.current);
+    if (inner.current) ro.observe(inner.current);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  return (
+    <div ref={outer} className={cx("w-full overflow-hidden", className)} style={{ height: h ?? "auto" }}>
+      <div ref={inner} style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: "max-content" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function AutoFit({ children, min = 0.5, max = 1.15, mode = "both", className = "", align = "top" }) {
   const outer = useRef(null);
   const inner = useRef(null);

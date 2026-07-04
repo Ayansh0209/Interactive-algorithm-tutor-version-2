@@ -25,6 +25,15 @@ function sortVars(entries, types) {
   return [...entries].sort((a, b) => weight(types[a[0]]) - weight(types[b[0]]));
 }
 
+// Structures that grow horizontally get the FULL panel width (their renderers
+// scale-to-fit) instead of being squeezed into one grid column with an inner
+// scrollbar the user has to slide.
+const WIDE_TYPES = new Set([
+  "binary_tree", "avl_tree", "red_black_tree", "segment_tree", "nary_tree",
+  "trie", "linked_list", "doubly_linked_list",
+  "graph_adjacency_list", "graph_weighted", "matrix", "dp_grid",
+]);
+
 export default function VariablesPanel({ step }) {
   if (!step) {
     return <EmptyState icon={<Icon name="target" size={22} />} title="No step selected" hint="Run code to see variables." />;
@@ -61,6 +70,7 @@ export default function VariablesPanel({ step }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={T.base}
+              style={WIDE_TYPES.has(vtype) ? { gridColumn: "1 / -1" } : undefined}
               className={cx(
                 "rounded-xl border bg-surface-2 overflow-hidden transition-colors duration-300",
                 changed.has(name) ? "border-warning/50 shadow-soft" : "border-border"
