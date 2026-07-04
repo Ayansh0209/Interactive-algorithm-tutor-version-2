@@ -250,7 +250,11 @@ def serialize_trie(node: Any, visited: set | None = None, depth: int = 0) -> Any
     visited.add(id(node))
 
     children_obj = _first_attr(node, ("children", "next", "edges", "links"))
-    is_word = bool(_first_attr(node, ("is_end_of_word", "is_word", "is_end", "end", "word")))
+    # Keep the STORED WORD if the node carries one (word-search tries store the
+    # matched string, e.g. "oath") -- don't collapse it to a bare boolean.
+    word_attr = _first_attr(node, ("word",))
+    end_attr = _first_attr(node, ("is_end_of_word", "is_word", "is_end", "end"))
+    is_word = bool(end_attr) or (isinstance(word_attr, str) and word_attr != "")
 
     children: dict[str, Any] = {}
     if isinstance(children_obj, dict):
@@ -262,4 +266,7 @@ def serialize_trie(node: Any, visited: set | None = None, depth: int = 0) -> Any
             if v is not None:
                 children[chr(ord("a") + i) if i < 26 else str(i)] = \
                     serialize_trie(v, visited, depth + 1)
-    return {"is_word": is_word, "children": children}
+    out = {"is_word": is_word, "children": children}
+    if isinstance(word_attr, str) and word_attr:
+        out["word"] = word_attr
+    return out

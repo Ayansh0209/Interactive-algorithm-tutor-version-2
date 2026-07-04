@@ -145,9 +145,13 @@ class Tracer:
         return stack
 
     def _serialize_locals(self, frame):
+        import types as _types
         clean = {k: v for k, v in frame.f_locals.items()
                  if not k.startswith("__") and not k.startswith(".")
-                 and k != "fromlist" and not callable(v)}
+                 and k != "fromlist" and not callable(v)
+                 # imported modules (heapq, math, ...) are machinery, not the
+                 # user's data -- never show them as variables
+                 and not isinstance(v, _types.ModuleType)}
         scenes, types = {}, {}
         for name, val in clean.items():
             vtype = detect_type(val, name)

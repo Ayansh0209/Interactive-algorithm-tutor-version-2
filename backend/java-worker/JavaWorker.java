@@ -374,6 +374,7 @@ class Ser {
       String rt = o.referenceType().name();
       if (rt.startsWith("java.util.")) {
         if (rt.contains("Stack")) return "stack";
+        if (rt.contains("PriorityQueue")) return "heap";
         if (rt.contains("Deque") || rt.contains("Queue") || rt.contains("LinkedList")) return "queue";
         if (rt.contains("Set")) return "set";
         if (rt.contains("Map")) return "object";
@@ -427,12 +428,46 @@ class Ser {
     if (v instanceof DoubleValue) return ((DoubleValue) v).value();
     if (v instanceof ObjectReference) {
       ObjectReference o = (ObjectReference) v;
-      if (o.referenceType().name().startsWith("java.lang.")) {
+      String rt = o.referenceType().name();
+      // StringBuilder/StringBuffer: read value[0..count] (byte[] LATIN1 in
+      // modern JDKs, char[] in old ones) instead of an opaque tag.
+      if (rt.equals("java.lang.StringBuilder") || rt.equals("java.lang.StringBuffer")) {
+        Value cnt = fieldRaw(o, "count");
+        Value val = fieldRaw(o, "value");
+        if (val instanceof ArrayReference && cnt instanceof IntegerValue) {
+          ArrayReference va = (ArrayReference) val;
+          int n = Math.min(((IntegerValue) cnt).value(), va.length());
+          StringBuilder sb = new StringBuilder();
+          for (int i = 0; i < n; i++) {
+            Value cv = va.getValue(i);
+            if (cv instanceof ByteValue) sb.append((char) ((ByteValue) cv).value());
+            else if (cv instanceof CharValue) sb.append(((CharValue) cv).value());
+          }
+          return sb.toString();
+        }
+      }
+      if (rt.startsWith("java.lang.")) {
         Value inner = fieldRaw(o, "value");
         if (inner != null && inner != v) return prim(inner);
       }
     }
     return v.toString();
+  }
+
+  // A short readable tag for a node-ish object: "<ListNode 4>" / "<TrieNode>".
+  static Object compactTag(ObjectReference o) {
+    String rt = o.referenceType().name();
+    String simple = rt.substring(rt.lastIndexOf('.') + 1);
+    int d = simple.lastIndexOf('$');
+    if (d >= 0) simple = simple.substring(d + 1);
+    Value val = field(o, VAL);
+    if (val != null) {
+      Object pv = prim(val);
+      if (pv instanceof Integer || pv instanceof Long || pv instanceof Double
+          || pv instanceof Boolean || (pv instanceof String && ((String) pv).length() <= 16))
+        return "<" + simple + " " + pv + ">";
+    }
+    return "<" + simple + ">";
   }
 
   static List<Object> arrayList(ArrayReference ar, ThreadReference thread) {
@@ -447,13 +482,46 @@ class Ser {
     List<Object> out = new ArrayList<>();
     if (!(v instanceof ObjectReference)) return out;
     ObjectReference o = (ObjectReference) v;
-    // ArrayList / Vector / Stack: read elementData[0..size] WITHOUT invoking.
+    // ArrayList: elementData[0..size]. Vector/Stack: elementData[0..elementCount].
     Value ed = fieldRaw(o, "elementData");
     Value sz = fieldRaw(o, "size");
+    if (!(sz instanceof IntegerValue)) sz = fieldRaw(o, "elementCount");
     if (ed instanceof ArrayReference && sz instanceof IntegerValue) {
       ArrayReference ar = (ArrayReference) ed;
       int n = Math.min(((IntegerValue) sz).value(), MaxNodes());
       for (int i = 0; i < n && i < ar.length(); i++) out.add(elem(ar.getValue(i), thread));
+      return out;
+    }
+    // PriorityQueue: internal heap array `queue` + size.
+    Value pq = fieldRaw(o, "queue");
+    Value psz = fieldRaw(o, "size");
+    if (pq instanceof ArrayReference && psz instanceof IntegerValue) {
+      ArrayReference ar = (ArrayReference) pq;
+      int n = Math.min(((IntegerValue) psz).value(), MaxNodes());
+      for (int i = 0; i < n && i < ar.length(); i++) out.add(elem(ar.getValue(i), thread));
+      return out;
+    }
+    // ArrayDeque: circular `elements` array between head and tail.
+    Value els = fieldRaw(o, "elements");
+    Value hd = fieldRaw(o, "head");
+    Value tl = fieldRaw(o, "tail");
+    if (els instanceof ArrayReference && hd instanceof IntegerValue && tl instanceof IntegerValue) {
+      ArrayReference ar = (ArrayReference) els;
+      int len = ar.length();
+      if (len > 0) {
+        int i = ((IntegerValue) hd).value(), t = ((IntegerValue) tl).value(), guard = 0;
+        while (i != t && guard++ < MaxNodes()) {
+          out.add(elem(ar.getValue(i), thread));
+          i = (i + 1) % len;
+        }
+      }
+      return out;
+    }
+    // HashSet/LinkedHashSet (`map`) and TreeSet (`m`): keys of the backing map.
+    Value backing = fieldRaw(o, "map");
+    if (!(backing instanceof ObjectReference)) backing = fieldRaw(o, "m");
+    if (backing instanceof ObjectReference) {
+      for (Object[] pair : mapPairs((ObjectReference) backing, thread)) out.add(pair[0]);
       return out;
     }
     // java.util.LinkedList: walk first/next reading item.
@@ -470,6 +538,40 @@ class Ser {
     return out;
   }
 
+  // Raw (key, value) pairs of a java.util map WITHOUT invoking methods:
+  // HashMap/LinkedHashMap walk the `table` buckets (TreeNode bins keep `next`
+  // links, so the linear walk covers them too); TreeMap walks `root` in order.
+  static List<Object[]> mapPairs(ObjectReference o, ThreadReference thread) {
+    List<Object[]> out = new ArrayList<>();
+    Value table = fieldRaw(o, "table");
+    if (table instanceof ArrayReference) {
+      ArrayReference ar = (ArrayReference) table;
+      for (int i = 0; i < ar.length() && out.size() < 200; i++) {
+        Value bucket = ar.getValue(i);
+        ObjectReference node = (bucket instanceof ObjectReference) ? (ObjectReference) bucket : null;
+        int guard = 0;
+        while (node != null && guard++ < 200) {
+          out.add(new Object[]{ prim(fieldRaw(node, "key")), elem(fieldRaw(node, "value"), thread) });
+          Value nx = fieldRaw(node, "next");
+          node = (nx instanceof ObjectReference) ? (ObjectReference) nx : null;
+        }
+      }
+      return out;
+    }
+    Value root = fieldRaw(o, "root");
+    if (root instanceof ObjectReference) treeMapWalk((ObjectReference) root, out, thread, 0);
+    return out;
+  }
+
+  static void treeMapWalk(ObjectReference entry, List<Object[]> out, ThreadReference thread, int depth) {
+    if (entry == null || depth > 64 || out.size() >= 200) return;
+    Value l = fieldRaw(entry, "left");
+    if (l instanceof ObjectReference) treeMapWalk((ObjectReference) l, out, thread, depth + 1);
+    out.add(new Object[]{ prim(fieldRaw(entry, "key")), elem(fieldRaw(entry, "value"), thread) });
+    Value r = fieldRaw(entry, "right");
+    if (r instanceof ObjectReference) treeMapWalk((ObjectReference) r, out, thread, depth + 1);
+  }
+
   static Value fieldRaw(ObjectReference o, String name) {
     Field f = o.referenceType().fieldByName(name);
     return (f != null) ? o.getValue(f) : null;
@@ -479,19 +581,69 @@ class Ser {
     if (e instanceof ArrayReference) return arrayList((ArrayReference) e, thread);
     if (e == null || e instanceof PrimitiveValue || e instanceof StringReference) return prim(e);
     if (e instanceof ObjectReference && ((ObjectReference) e).referenceType().name().startsWith("java.lang.")) return prim(e);
-    return objScene(e, thread);
+    // Nested java.util containers (List<List<Integer>> adjacency lists, maps)
+    // expand; other custom objects render as short tags ("<ListNode 4>") so
+    // cells stay readable; the full field table shows for top-level vars.
+    ObjectReference oe = (ObjectReference) e;
+    if (oe.referenceType().name().startsWith("java.util.")) return fieldVal(e, thread);
+    return compactTag(oe);
   }
 
-  // NEVER invoke methods here: doing so on a stepping thread breaks the step request.
+  // NEVER invoke methods here: doing so on a stepping thread breaks the step
+  // request. Emits {type:"object", cls, fields} matching the Python engine's
+  // shape, so the frontend ObjectView shows real fields instead of "<X>".
   static Object objScene(Value v, ThreadReference thread) {
     if (v == null) return null;
     if (v instanceof ObjectReference) {
       ObjectReference o = (ObjectReference) v;
       String rt = o.referenceType().name();
+      // java.lang values (StringBuilder, boxed types) -> their readable value.
+      if (rt.startsWith("java.lang.")) return prim(v);
       String simple = rt.substring(rt.lastIndexOf('.') + 1);
-      return map("type", "object", "repr", "<" + simple + ">");
+      int dd = simple.lastIndexOf('$');
+      if (dd >= 0) simple = simple.substring(dd + 1);
+      // java.util maps -> their entries as fields.
+      if (rt.startsWith("java.util.") && rt.contains("Map")) {
+        Map<String,Object> fields = new LinkedHashMap<>();
+        for (Object[] pair : mapPairs(o, thread)) fields.put(String.valueOf(pair[0]), pair[1]);
+        return map("type", "object", "cls", simple, "fields", fields);
+      }
+      // Other java.util things that reach here -> value list.
+      if (rt.startsWith("java.util.")) {
+        return map("type", "object", "cls", simple, "fields",
+            map("values", collectionToList(v, thread)));
+      }
+      // Custom class instance -> its real fields (nested values compacted).
+      Map<String,Object> fields = new LinkedHashMap<>();
+      int count = 0;
+      try {
+        for (Field f : o.referenceType().allFields()) {
+          if (f.isStatic() || f.isSynthetic()) continue;
+          if (count++ >= 30) break;
+          try { fields.put(f.name(), fieldVal(o.getValue(f), thread)); }
+          catch (Exception ignore) {}
+        }
+      } catch (Exception ignore) {}
+      return map("type", "object", "cls", simple, "fields", fields);
     }
     return prim(v);
+  }
+
+  // Serialize one FIELD of an object: primitives inline, nested java.util
+  // containers expand, other objects become compact tags (no deep recursion).
+  static Object fieldVal(Value v, ThreadReference thread) {
+    if (v == null || v instanceof PrimitiveValue || v instanceof StringReference) return prim(v);
+    if (v instanceof ArrayReference) return arrayList((ArrayReference) v, thread);
+    ObjectReference o = (ObjectReference) v;
+    String rt = o.referenceType().name();
+    if (rt.startsWith("java.lang.")) return prim(v);
+    if (rt.startsWith("java.util.") && rt.contains("Map")) {
+      Map<String,Object> m = new LinkedHashMap<>();
+      for (Object[] pair : mapPairs(o, thread)) m.put(String.valueOf(pair[0]), pair[1]);
+      return m;
+    }
+    if (rt.startsWith("java.util.")) return collectionToList(v, thread);
+    return compactTag(o);
   }
 
   static Object linkedList(ObjectReference head) {

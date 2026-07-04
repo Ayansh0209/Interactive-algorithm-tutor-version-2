@@ -139,12 +139,44 @@ def _scalar(v, code):
             iv = int(v)
             # printable char -> its glyph, else the code
             return chr(iv) if 32 <= iv < 127 else iv
+        # gdb reports plain C `char` as a size-1 INT, not TYPE_CODE_CHAR --
+        # render printable chars as glyphs so boards/keys read as letters.
+        # unqualified() strips const/volatile (map keys are `const char`).
+        try:
+            tn = str(v.type.strip_typedefs().unqualified())
+        except Exception:
+            tn = ""
+        if tn in ("char", "signed char", "unsigned char"):
+            iv = int(v)
+            return chr(iv) if 32 <= iv < 127 else iv
         return int(v)
     except Exception:
         try:
             return str(v)
         except Exception:
             return None
+
+
+_CONTAINER_PREFIXES = (
+    "std::map", "std::unordered_map", "std::multimap",
+    "std::set", "std::unordered_set", "std::multiset",
+    "std::stack", "std::queue", "std::priority_queue",
+    "std::deque", "std::list",
+)
+
+
+def _nested_container(v, tn):
+    """Serialize a container VALUE (e.g. a struct FIELD like TrieNode's
+    ``unordered_map<char, TrieNode*> children``) into plain JSON via the
+    pretty-printer reader, instead of dumping raw _M_h hashtable internals.
+    Returns None when unreadable."""
+    got = read_container(v, tn)
+    if got is None:
+        return None
+    _, scene = got
+    if isinstance(scene, dict) and "values" in scene:
+        return scene["values"]        # set/stack/queue/heap -> plain list
+    return scene                      # map -> plain dict
 
 
 def serialize_value(v, depth=0):
@@ -161,6 +193,12 @@ def serialize_value(v, depth=0):
 
     if _is_string(tn):
         return _read_string(v)
+    # STL containers nested inside structs / other containers.
+    flat = tn.replace(" ", "")
+    if any(flat.startswith(p) for p in _CONTAINER_PREFIXES):
+        got = _nested_container(v, tn)
+        if got is not None:
+            return got
     if _is_vector(tn):
         try:
             return [serialize_value(e, depth + 1) for e in _vector_elems(v)]
@@ -180,6 +218,20 @@ def serialize_value(v, depth=0):
         try:
             if int(v) == 0:
                 return None
+        except Exception:
+            pass
+        # Pointer to a struct -> compact "<Type val>" tag (readable in maps /
+        # heaps / object fields) instead of a raw hex address.
+        try:
+            pt = t.target().strip_typedefs()
+            if pt.code == gdb.TYPE_CODE_STRUCT:
+                name = str(pt).split("::")[-1]
+                inner = _field_value(v.dereference(), VAL_NAMES)
+                if inner is not None:
+                    iv = serialize_value(inner, MAX_DEPTH)  # value only, no recursion
+                    if isinstance(iv, (int, float, str, bool)):
+                        return "<%s %s>" % (name, iv)
+                return "<%s>" % name
         except Exception:
             pass
         return str(v)
