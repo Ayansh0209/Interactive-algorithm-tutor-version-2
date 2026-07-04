@@ -1,0 +1,14 @@
+<svg width="240" height="72" viewBox="0 0 240 72" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="238" height="70" rx="14" fill="#0f172a" stroke="#334155"/>
+  <g stroke="#38bdf8" stroke-width="2" fill="none">
+    <line x1="34" y1="36" x2="52" y2="22"/>
+    <line x1="34" y1="36" x2="52" y2="50"/>
+    <line x1="52" y1="22" x2="70" y2="36"/>
+    <line x1="52" y1="50" x2="70" y2="36"/>
+  </g>
+  <circle cx="34" cy="36" r="6" fill="#38bdf8"/>
+  <circle cx="52" cy="22" r="6" fill="#818cf8"/>
+  <circle cx="52" cy="50" r="6" fill="#818cf8"/>
+  <circle cx="70" cy="36" r="6" fill="#38bdf8"/>
+  <text x="96" y="45" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#f8fafc">IAT</text>
+</svg>
